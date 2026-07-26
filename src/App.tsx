@@ -55,13 +55,13 @@ export default function App() {
   const [currentDraftId, setCurrentDraftId] = useState<number>(() => Date.now());
   const [loading, setLoading] = useState<boolean>(false);
 
-  // هێنانی داتاکان بەپێی ناوی ئەکاونتی ناوخۆیی
+  // هێنانی داتاکان ڕاستەوخۆ لە Supabase بە بێ کێشە
   const fetchDataFromSupabase = async () => {
     if (!currentUser) return;
     setLoading(true);
 
     try {
-      const { data: customerData, error: custError } = await supabase.from('customers').select('*').eq('user_id', currentUser);
+      const { data: customerData, error: custError } = await supabase.from('customers').select('*');
       if (!custError && customerData) {
         setCustomers(customerData.map((c: any) => ({
           id: c.id, name: c.name || '', phone: c.phone || '', address: c.address || '',
@@ -70,7 +70,7 @@ export default function App() {
         })));
       }
 
-      const { data: cashData, error: cashError } = await supabase.from('cash_receipts').select('*').eq('user_id', currentUser);
+      const { data: cashData, error: cashError } = await supabase.from('cash_receipts').select('*');
       if (!cashError && cashData) {
         setSavedReceipts(cashData.map((r: any) => ({
           id: r.id, customerName: r.customer_name || '', phone: r.phone || '',
@@ -103,7 +103,7 @@ export default function App() {
 
   // فرمانەکانی سەیڤ کردن
   const handleAutoSaveCash = async (receiptData: Omit<SavedReceipt, 'id'>) => {
-    const receiptToSave = { id: currentDraftId, ...receiptData, user_id: currentUser };
+    const receiptToSave = { id: currentDraftId, ...receiptData };
     setSavedReceipts(prev => {
       const exists = prev.find(r => r.id === currentDraftId);
       if (exists) return prev.map(r => r.id === currentDraftId ? receiptToSave : r);
@@ -112,8 +112,7 @@ export default function App() {
 
     await supabase.from('cash_receipts').upsert({
       id: currentDraftId, customer_name: receiptData.customerName, phone: receiptData.phone,
-      date: receiptData.date, total_amount: receiptData.totalAmount, items: receiptData.items,
-      user_id: currentUser
+      date: receiptData.date, total_amount: receiptData.totalAmount, items: receiptData.items
     });
   };
 
@@ -124,15 +123,14 @@ export default function App() {
     await supabase.from('customers').insert({
       id: newCustomer.id, name: newCustomer.name, phone: newCustomer.phone,
       address: newCustomer.address, notes: newCustomer.notes, balance: newCustomer.balance,
-      date: newCustomer.date, debt_receipts: newCustomer.debtReceipts,
-      user_id: currentUser
+      date: newCustomer.date, debt_receipts: newCustomer.debtReceipts
     });
   };
   
   const handleDeleteSavedReceipt = async (id: number) => {
     if(window.confirm('دڵنیایت لە سڕینەوەی ئەم وەسڵە نەقدییە؟')) {
       setSavedReceipts(prev => prev.filter(r => r.id !== id));
-      await supabase.from('cash_receipts').delete().eq('id', id).eq('user_id', currentUser);
+      await supabase.from('cash_receipts').delete().eq('id', id);
     }
   };
 
@@ -141,7 +139,7 @@ export default function App() {
     await supabase.from('cash_receipts').update({
       customer_name: updatedReceipt.customerName, phone: updatedReceipt.phone,
       total_amount: updatedReceipt.totalAmount, items: updatedReceipt.items
-    }).eq('id', updatedReceipt.id).eq('user_id', currentUser);
+    }).eq('id', updatedReceipt.id);
   };
 
   const handleEditCustomer = async (updatedCustomer: Customer) => {
@@ -149,14 +147,14 @@ export default function App() {
     await supabase.from('customers').update({
       name: updatedCustomer.name, phone: updatedCustomer.phone, address: updatedCustomer.address,
       notes: updatedCustomer.notes, balance: updatedCustomer.balance, debt_receipts: updatedCustomer.debtReceipts
-    }).eq('id', updatedCustomer.id).eq('user_id', currentUser);
+    }).eq('id', updatedCustomer.id);
   };
   
   const handleDeleteCustomer = async (id: number) => {
     if(window.confirm('دڵنیایت لە سڕینەوەی ئەم کڕیارە؟ هەموو قەرزەکانیشی دەسڕێتەوە!')){
       setCustomers(prev => prev.filter(c => c.id !== id));
       if (activeCustomer?.id === id) setActiveTab('customers');
-      await supabase.from('customers').delete().eq('id', id).eq('user_id', currentUser);
+      await supabase.from('customers').delete().eq('id', id);
     }
   };
 
@@ -181,7 +179,7 @@ export default function App() {
 
     await supabase.from('customers').update({
       balance: total, debt_receipts: newReceipts
-    }).eq('id', customerId).eq('user_id', currentUser);
+    }).eq('id', customerId);
   };
 
   const handleLogout = () => {
@@ -248,7 +246,6 @@ export default function App() {
   );
 }
 
-// پەنجەرەی لۆگینی ناوخۆیی (بێ کێشە و خێرا)
 function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -258,7 +255,6 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
     e.preventDefault();
     setErrorMsg('');
 
-    // دەتوانیت هەر ناوێک و پاسۆردێک لێرە دابنێیت
     if ((username === 'zana1' && password === '123456') || 
         (username === 'zana2' && password === '123456') ||
         (username === 'masrour' && password === '123456')) {
@@ -337,9 +333,6 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
   );
 }
 
-// ----------------------------------------------------------------------
-// ١. داشبۆرد
-// ----------------------------------------------------------------------
 function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedReceipts, onDeleteReceipt, onEditReceipt, theme }: any) {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
@@ -621,9 +614,6 @@ function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
   );
 }
 
-// ----------------------------------------------------------------------
-// ٢. کڕیارەکان
-// ----------------------------------------------------------------------
 function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOpenLedger }: any) {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -759,9 +749,6 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
   );
 }
 
-// ----------------------------------------------------------------------
-// ٢.٥ دەفتەری قەرزەکان
-// ----------------------------------------------------------------------
 function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
   const [receipts, setReceipts] = useState<CustomerReceipt[]>(() => {
     if (customer.debtReceipts?.length > 0) {
@@ -1139,9 +1126,6 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
   );
 }
 
-// ----------------------------------------------------------------------
-// ٣. وەسڵی نەقدی
-// ----------------------------------------------------------------------
 function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -1455,7 +1439,6 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
   );
 }
 
-// ----------------------------------------------------------------------
 function StaticReceiptTemplate({ receipt, theme }: any) {
   return (
     <div className="bg-white border p-12 text-black mx-auto flex flex-col justify-between shadow-sm" style={{ width: '210mm', minHeight: '297mm' }}>
