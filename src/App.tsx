@@ -55,7 +55,6 @@ export default function App() {
   const [currentDraftId, setCurrentDraftId] = useState<number>(() => Date.now());
   const [loading, setLoading] = useState<boolean>(false);
 
-  // هێنانی داتاکان ڕاستەوخۆ لە Supabase بە بێ کێشە
   const fetchDataFromSupabase = async () => {
     if (!currentUser) return;
     setLoading(true);
@@ -101,7 +100,6 @@ export default function App() {
     }} />;
   }
 
-  // فرمانەکانی سەیڤ کردن
   const handleAutoSaveCash = async (receiptData: Omit<SavedReceipt, 'id'>) => {
     const receiptToSave = { id: currentDraftId, ...receiptData };
     setSavedReceipts(prev => {
@@ -121,9 +119,14 @@ export default function App() {
   const handleAddCustomer = async (newCustomer: Customer) => {
     setCustomers(prev => [...prev, newCustomer]);
     await supabase.from('customers').insert({
-      id: newCustomer.id, name: newCustomer.name, phone: newCustomer.phone,
-      address: newCustomer.address, notes: newCustomer.notes, balance: newCustomer.balance,
-      date: newCustomer.date, debt_receipts: newCustomer.debtReceipts
+      id: newCustomer.id, 
+      name: newCustomer.name, 
+      phone: newCustomer.phone,
+      address: newCustomer.address, 
+      notes: newCustomer.notes, 
+      balance: newCustomer.balance,
+      date: newCustomer.date, 
+      debt_receipts: newCustomer.debtReceipts
     });
   };
   
