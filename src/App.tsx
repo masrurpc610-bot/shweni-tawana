@@ -1080,11 +1080,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                   </div>
 
                   <div className="mt-auto">
-                    <div className="text-center mb-6 py-2 border-t border-b border-gray-300">
-                      <p className="font-bold text-sm text-gray-800">بەخێر بێن، ئێرە ماڵی هەمووتانە؛ هیوادارین لە کەموکورتییمان ببورن. سوپاس بۆ متمانەتان!</p>
-                    </div>
-
-                    <div className="flex justify-between items-end">
+                    <div className="flex justify-between items-end pt-4">
                       {isLastPage ? (
                         <>
                           <div className="flex gap-16 text-base font-bold">
@@ -1392,11 +1388,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
             </div>
 
             <div className="mt-auto">
-              <div className="text-center mb-6 py-2 border-t border-b border-gray-300">
-                <p className="font-bold text-sm text-gray-800">بەخێر بێن، ئێرە ماڵی هەمووتانە؛ هیوادارین لە کەموکورتییمان ببورن. سوپاس بۆ متمانەتان!</p>
-              </div>
-
-              <div className="flex justify-between items-end">
+              <div className="flex justify-between items-end pt-4">
                 {isLastPage ? (
                   <>
                     <div className="flex gap-16 text-base font-bold">
@@ -1499,11 +1491,7 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
       </div>
 
       <div className="mt-auto">
-        <div className="text-center mb-6 py-2 border-t border-b border-gray-300">
-          <p className="font-bold text-sm text-gray-800">بەخێر بێن، ئێرە ماڵی هەمووتانە؛ هیوادارین لە کەموکورتییمان ببورن. سوپاس بۆ متمانەتان!</p>
-        </div>
-
-        <div className="flex justify-between items-end">
+        <div className="flex justify-between items-end pt-4">
           <div className="flex gap-16 text-base font-bold">
             <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
             <div className="text-center"><p>مۆر و ئیمزا</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
