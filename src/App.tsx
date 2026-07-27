@@ -191,8 +191,16 @@ export default function App() {
   };
 
   return (
-    <div className={`flex h-screen transition-colors duration-300 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'} text-right`} dir="rtl">
+    <div className={`flex h-screen print:h-auto print:block transition-colors duration-300 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'} text-right`} dir="rtl">
       
+      <style>{`
+        @media print {
+          @page { margin: 0; }
+          body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          /* ئەمە بۆ ئەوەیە لاپەڕەکان لە کاتی چاپکردن نەبڕدرێن */
+        }
+      `}</style>
+
       <aside className={`w-64 border-l flex flex-col transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} print:hidden`}>
         <div className={`h-20 flex items-center justify-center border-b gap-3 ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
           <div className={`${theme.main} p-2 rounded-lg text-white transition-colors`}><Building2 size={24} /></div>
@@ -211,11 +219,14 @@ export default function App() {
              <button type="button" onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-red-500 hover:bg-red-50 dark:hover:bg-gray-700 transition-colors">
                <LogOut size={20} /> <span>چوونەدەرەوە</span>
              </button>
+             <div className="text-center mt-6 text-[11px] font-bold text-gray-400" dir="ltr">
+               Designed and Developed by Eng. Masrour
+             </div>
           </div>
         </nav>
       </aside>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible">
         <header className={`h-16 border-b flex items-center justify-between px-8 transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} print:hidden`}>
           <div className={`text-xl font-bold ${theme.text} transition-colors flex items-center gap-2`}>
             سیستەمی بەڕێوەبردن 
@@ -238,7 +249,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className={`flex-1 overflow-y-auto p-8 print:p-0 print:bg-white transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+        <main className={`flex-1 overflow-y-auto p-8 print:p-0 print:bg-white print:block print:overflow-visible transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
           {activeTab === 'dashboard' && <DashboardView isDark={isDarkMode} timeFilter={timeFilter} setTimeFilter={setTimeFilter} customers={customers} savedReceipts={savedReceipts} onDeleteReceipt={handleDeleteSavedReceipt} onEditReceipt={handleEditSavedReceipt} theme={theme} />}
           {activeTab === 'customers' && <CustomersView isDark={isDarkMode} customers={customers} theme={theme} onAdd={handleAddCustomer} onEdit={handleEditCustomer} onDelete={handleDeleteCustomer} onOpenLedger={(c: Customer) => { setActiveCustomer(c); setActiveTab('customer-ledger'); }} />}
           {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} />}
@@ -269,7 +280,6 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
 
   return (
     <div className={`flex min-h-screen items-center justify-center p-4 transition-colors ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'}`} dir="rtl">
-      
       <div className="absolute top-4 left-4">
         <button type="button" onClick={() => setIsDark(!isDark)} className={`p-2 rounded-full transition-colors ${isDark ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white shadow hover:bg-gray-50'}`}>
           {isDark ? <Sun size={24} className="text-yellow-400"/> : <Moon size={24} className="text-gray-600"/>}
@@ -331,6 +341,9 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
             چوونە ژوورەوە
           </button>
         </form>
+        <div className="text-center mt-6 text-xs font-bold text-gray-400" dir="ltr">
+          Designed and Developed by Eng. Masrour
+        </div>
       </div>
     </div>
   );
@@ -444,8 +457,8 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
       )}
 
       {showReceiptModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 print:bg-white print:inset-auto print:relative p-4">
-          <div className={`w-[90%] max-w-5xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl print:shadow-none print:p-0 print:w-full ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black print:bg-white'}`}>
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 print:static print:inset-auto print:bg-white print:p-0 print:block p-4">
+          <div className={`w-[90%] max-w-5xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl print:w-full print:max-h-none print:overflow-visible print:shadow-none print:p-0 print:block ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black print:bg-white'}`}>
             <div className="flex justify-between items-center mb-6 print:hidden">
               <h2 className="text-2xl font-bold">ئەرشیفی وەسڵە نەقدییەکان</h2>
               <button type="button" onClick={() => {setShowReceiptModal(false); setSelectedReceipt(null); setReceiptSearch('');}} className="text-red-500 hover:text-red-700 bg-red-100 p-2 rounded-lg"><X size={24}/></button>
@@ -842,8 +855,8 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
   let runningTotalDebt = 0;
 
   return (
-    <div className="w-full flex flex-col items-center pb-20">
-      <div className="w-[210mm] flex justify-between items-center mb-6 print:hidden sticky top-0 bg-gray-100 dark:bg-gray-900 z-10 py-4 border-b border-gray-300 dark:border-gray-700">
+    <div className="w-full flex flex-col items-center pb-20 print:pb-0 print:block">
+      <div className="w-[210mm] print:w-full flex justify-between items-center mb-6 print:hidden sticky top-0 bg-gray-100 dark:bg-gray-900 z-10 py-4 border-b border-gray-300 dark:border-gray-700">
         <div className="flex items-center gap-4">
           <button type="button" onClick={onBack} className="bg-gray-300 hover:bg-gray-400 text-gray-800 p-2 rounded-lg font-bold transition-colors"><ArrowRight size={24}/></button>
           <h2 className="text-2xl font-bold text-red-600">دەفتەری قەرزی ({customer.name})</h2>
@@ -884,7 +897,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
         }
 
         return (
-          <div key={receipt.id} className="mb-12 print:mb-0 w-[210mm]">
+          <div key={receipt.id} className="mb-12 print:mb-0 w-[210mm] print:w-full print:block">
             
             <div className="flex justify-between items-center bg-gray-300 dark:bg-gray-700 p-3 rounded-t-lg border border-b-0 border-gray-400 print:hidden">
               <div className="flex items-center gap-3">
@@ -901,7 +914,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
               const isLastPage = pIndex === totalPages - 1;
 
               return (
-                <div key={pIndex} className="bg-white border p-12 text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:mb-0 print:border-none print:shadow-none" style={{ width: '210mm', minHeight: '297mm', pageBreakAfter: 'always' }}>
+                <div key={pIndex} className="bg-white border p-12 text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:mb-0 print:border-none print:shadow-none print:block" style={{ width: '210mm', minHeight: '297mm', pageBreakAfter: 'always' }}>
                   <div>
                     <div className="text-center mb-6 border-b-2 border-black pb-4">
                       <h1 className={`text-3xl font-black ${theme.text} mb-2`}>شوێنی توانا</h1>
@@ -1113,6 +1126,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                         </div>
                       )}
                     </div>
+                    <div className="text-center mt-6 text-xs text-gray-400 font-sans print:block" dir="ltr">Designed and Developed by Eng. Masrour</div>
                   </div>
                 </div>
               );
@@ -1195,8 +1209,8 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
   }
 
   return (
-    <div className="w-full flex flex-col items-center pb-20">
-      <div className="w-[210mm] flex justify-between items-center mb-6 print:hidden">
+    <div className="w-full flex flex-col items-center pb-20 print:pb-0 print:block">
+      <div className="w-[210mm] print:w-full flex justify-between items-center mb-6 print:hidden">
         <h2 className={`text-2xl font-bold ${theme.text}`}>دروستکردنی وەسڵی نەقدی</h2>
         <div className="flex gap-4">
           <button type="button" onClick={startNewReceipt} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus size={20}/> وەسڵی نوێ</button>
@@ -1209,7 +1223,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
         const isLastPage = pIndex === totalPages - 1;
 
         return (
-          <div key={pIndex} id="printable-receipt" className="bg-white border p-12 text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:mb-0 print:border-none print:shadow-none" style={{ width: '210mm', minHeight: '297mm', pageBreakAfter: 'always' }}>
+          <div key={pIndex} id="printable-receipt" className="bg-white border p-12 text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:mb-0 print:border-none print:shadow-none print:block" style={{ width: '210mm', minHeight: '297mm', pageBreakAfter: 'always' }}>
             <div>
               <div className="text-center mb-6 border-b-2 border-black pb-4">
                 <h1 className={`text-3xl font-black ${theme.text} mb-2`}>شوێنی توانا</h1>
@@ -1426,6 +1440,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                   </div>
                 )}
               </div>
+              <div className="text-center mt-6 text-xs text-gray-400 font-sans print:block" dir="ltr">Designed and Developed by Eng. Masrour</div>
             </div>
           </div>
         );
@@ -1436,7 +1451,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
 
 function StaticReceiptTemplate({ receipt, theme }: any) {
   return (
-    <div className="bg-white border p-12 text-black mx-auto flex flex-col justify-between shadow-sm" style={{ width: '210mm', minHeight: '297mm' }}>
+    <div className="bg-white border p-12 text-black mx-auto flex flex-col justify-between shadow-sm print:shadow-none print:border-none print:p-0 print:block" style={{ width: '210mm', minHeight: '297mm' }}>
       <div>
         <div className="text-center mb-6 border-b-2 border-black pb-4">
           <h1 className={`text-3xl font-black ${theme?.text || 'text-blue-900'} mb-2`}>شوێنی توانا</h1>
@@ -1501,6 +1516,7 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
             <p className={`text-2xl font-black mt-1 ${theme?.textDark || 'text-emerald-700'}`}>{receipt.totalAmount.toLocaleString()} دینار</p>
           </div>
         </div>
+        <div className="text-center mt-6 text-xs text-gray-400 font-sans print:block" dir="ltr">Designed and Developed by Eng. Masrour</div>
       </div>
     </div>
   );
