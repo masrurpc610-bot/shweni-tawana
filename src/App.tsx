@@ -205,13 +205,13 @@ export default function App() {
             -webkit-print-color-adjust: exact; 
             print-color-adjust: exact;
           }
-          /* This removes the browser header/footer URLs */
+          /* ئەمە بۆ ئەوەیە لاپەڕەکان لە کاتی چاپکردن نەبڕدرێن */
           @page { margin-top: 0; margin-bottom: 0; }
           
-          /* Hide scrollbars */
+          /* شاردنەوەی سکڕۆڵەکان و دەرخستنی هەموو داتاکان بۆ پرینت */
           ::-webkit-scrollbar { display: none; }
           
-          /* Force inputs to look like normal text in print */
+          /* شاردنەوەی شێوازی input لە کاتی چاپکردن */
           input, select, textarea {
             appearance: none;
             -webkit-appearance: none;
@@ -249,7 +249,8 @@ export default function App() {
         </nav>
       </aside>
 
-      <div className="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible print:h-auto">
+      {/* کێشەی سەرەکی لێرە بوو: overflow-hidden دەبووە هۆی شاردنەوەی پەڕەکان لە پرینتدا */}
+      <div className="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible print:h-auto print:w-full">
         <header className={`h-16 border-b flex items-center justify-between px-8 transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} print:hidden`}>
           <div className={`text-xl font-bold ${theme.text} transition-colors flex items-center gap-2`}>
             سیستەمی بەڕێوەبردن 
@@ -272,7 +273,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className={`flex-1 overflow-y-auto p-8 print:p-0 print:m-0 print:bg-white print:block print:overflow-visible print:h-auto transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+        <main className={`flex-1 overflow-y-auto p-8 print:p-0 print:m-0 print:bg-white print:block print:overflow-visible print:h-auto print:w-full transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
           {activeTab === 'dashboard' && <DashboardView isDark={isDarkMode} timeFilter={timeFilter} setTimeFilter={setTimeFilter} customers={customers} savedReceipts={savedReceipts} onDeleteReceipt={handleDeleteSavedReceipt} onEditReceipt={handleEditSavedReceipt} theme={theme} />}
           {activeTab === 'customers' && <CustomersView isDark={isDarkMode} customers={customers} theme={theme} onAdd={handleAddCustomer} onEdit={handleEditCustomer} onDelete={handleDeleteCustomer} onOpenLedger={(c: Customer) => { setActiveCustomer(c); setActiveTab('customer-ledger'); }} />}
           {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} />}
@@ -297,7 +298,7 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
         (username === 'masrour' && password === '123456')) {
       onLogin(username);
     } else {
-      setErrorMsg('ناوی بەکارهێنەر یان پاسۆرد هەڵەیە! (نموونە: zana1 و پاسۆرد: 123456)');
+      setErrorMsg('ناوی بەکارهێنەر یان پاسۆرد هەڵەیە!');
     }
   };
 
@@ -326,7 +327,7 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block mb-2 text-sm font-bold">ناوی بەکارهێنەر (بۆ نموونە: zana1)</label>
+            <label className="block mb-2 text-sm font-bold">ناوی بەکارهێنەر</label>
             <div className={`flex items-center p-3 rounded-xl border transition-colors ${isDark ? 'bg-gray-700 border-gray-600 focus-within:border-blue-500' : 'bg-gray-50 border-gray-300 focus-within:border-blue-500'}`}>
               <User size={20} className="text-gray-400 ml-3" />
               <input 
@@ -334,7 +335,7 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full bg-transparent outline-none font-medium text-left" 
-                placeholder="zana1"
+                placeholder=""
                 dir="ltr"
                 required
               />
@@ -342,7 +343,7 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
           </div>
 
           <div>
-            <label className="block mb-2 text-sm font-bold">پاسۆرد (123456)</label>
+            <label className="block mb-2 text-sm font-bold">تێپەڕوشە (پاسۆرد)</label>
             <div className={`flex items-center p-3 rounded-xl border transition-colors ${isDark ? 'bg-gray-700 border-gray-600 focus-within:border-blue-500' : 'bg-gray-50 border-gray-300 focus-within:border-blue-500'}`}>
               <Lock size={20} className="text-gray-400 ml-3" />
               <input 
@@ -350,7 +351,7 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-transparent outline-none font-medium text-left tracking-widest" 
-                placeholder="••••••"
+                placeholder=""
                 dir="ltr"
                 required
               />
@@ -453,7 +454,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
       </div>
 
       {showPaymentsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print:hidden">
           <div className={`w-[90%] max-w-4xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">لێستی قەرزی وەرگیراوەکان (واصڵ)</h2>
@@ -480,8 +481,8 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
       )}
 
       {showReceiptModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 print:static print:inset-auto print:bg-white print:p-0 print:block p-4">
-          <div className={`w-[90%] max-w-5xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl print:w-full print:max-h-none print:overflow-visible print:shadow-none print:p-0 print:block ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black print:bg-white'}`}>
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print:absolute print:inset-0 print:bg-white print:p-0 print:block print:w-full print:h-auto">
+          <div className={`w-[90%] max-w-5xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl print:w-full print:max-w-none print:max-h-none print:overflow-visible print:p-0 print:shadow-none print:border-none print:bg-white ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
             <div className="flex justify-between items-center mb-6 print:hidden">
               <h2 className="text-2xl font-bold">ئەرشیفی وەسڵە نەقدییەکان</h2>
               <button type="button" onClick={() => {setShowReceiptModal(false); setSelectedReceipt(null); setReceiptSearch('');}} className="text-red-500 hover:text-red-700 bg-red-100 p-2 rounded-lg"><X size={24}/></button>
@@ -584,7 +585,7 @@ function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 print:hidden">
       <div className={`w-[90%] max-w-4xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl ${isDark ? 'bg-gray-900 text-white' : 'bg-white text-black'}`}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">دەستکاریکردنی وەسڵ</h2>
@@ -728,7 +729,7 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print:hidden">
           <div className={`w-[500px] p-6 rounded-2xl shadow-xl ${isDark ? 'bg-gray-800 text-white' : 'bg-white text-black'}`}>
             <div className="flex justify-between items-center mb-6">
               <button type="button" onClick={() => setShowModal(false)} className="text-red-500 hover:text-red-700"><X size={24}/></button>
@@ -879,7 +880,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
 
   return (
     <div className="w-full flex flex-col items-center pb-20 print:pb-0 print:block">
-      <div className="w-full max-w-[210mm] print:w-full flex justify-between items-center mb-6 print:hidden sticky top-0 bg-gray-100 dark:bg-gray-900 z-10 py-4 border-b border-gray-300 dark:border-gray-700">
+      <div className="w-full max-w-[210mm] print:max-w-none print:w-full flex justify-between items-center mb-6 print:hidden sticky top-0 bg-gray-100 dark:bg-gray-900 z-10 py-4 border-b border-gray-300 dark:border-gray-700">
         <div className="flex items-center gap-4">
           <button type="button" onClick={onBack} className="bg-gray-300 hover:bg-gray-400 text-gray-800 p-2 rounded-lg font-bold transition-colors"><ArrowRight size={24}/></button>
           <h2 className="text-2xl font-bold text-red-600">دەفتەری قەرزی ({customer.name})</h2>
@@ -937,7 +938,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
               const isLastPage = pIndex === totalPages - 1;
 
               return (
-                <div key={pIndex} className="bg-white border text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:m-0 print:border-none print:shadow-none print:block" style={{ width: '210mm', height: '297mm', padding: '15mm', boxSizing: 'border-box', pageBreakAfter: 'always' }}>
+                <div key={pIndex} className="bg-white border text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:m-0 print:border-none print:shadow-none print:block" style={{ width: '210mm', minHeight: '297mm', padding: '15mm', boxSizing: 'border-box', pageBreakAfter: 'always' }}>
                   <div>
                     <div className="text-center mb-6 border-b-2 border-black pb-4">
                       <h1 className={`text-3xl font-black ${theme.text} mb-2`}>شوێنی توانا</h1>
@@ -1125,7 +1126,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                         <>
                           <div className="flex gap-16 text-base font-bold">
                             <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-                            <div className="text-center"><p>ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
+                            <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
                           </div>
                           
                           <div className="border-4 border-black p-4 w-72 text-center bg-gray-100">
@@ -1237,7 +1238,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
 
   return (
     <div className="w-full flex flex-col items-center pb-20 print:pb-0 print:block">
-      <div className="w-full max-w-[210mm] print:w-full flex justify-between items-center mb-6 print:hidden">
+      <div className="w-full max-w-[210mm] print:max-w-none print:w-full flex justify-between items-center mb-6 print:hidden">
         <h2 className={`text-2xl font-bold ${theme.text}`}>دروستکردنی وەسڵی نەقدی</h2>
         <div className="flex gap-4">
           <button type="button" onClick={startNewReceipt} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus size={20}/> وەسڵی نوێ</button>
@@ -1250,7 +1251,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
         const isLastPage = pIndex === totalPages - 1;
 
         return (
-          <div key={pIndex} id="printable-receipt" className="bg-white border text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:m-0 print:border-none print:shadow-none print:block" style={{ width: '210mm', height: '297mm', padding: '15mm', boxSizing: 'border-box', pageBreakAfter: 'always' }}>
+          <div key={pIndex} id="printable-receipt" className="bg-white border text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:m-0 print:border-none print:shadow-none print:block" style={{ width: '210mm', minHeight: '297mm', padding: '15mm', boxSizing: 'border-box', pageBreakAfter: 'always' }}>
             <div>
               <div className="text-center mb-6 border-b-2 border-black pb-4">
                 <h1 className={`text-3xl font-black ${theme.text} mb-2`}>شوێنی توانا</h1>
@@ -1438,7 +1439,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                   <>
                     <div className="flex gap-16 text-base font-bold">
                       <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-                      <div className="text-center"><p>ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
+                      <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
                     </div>
                     
                     <div className="border-4 border-black p-4 w-80 text-center bg-gray-100 space-y-2">
@@ -1482,7 +1483,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
 
 function StaticReceiptTemplate({ receipt, theme }: any) {
   return (
-    <div className="bg-white border text-black mx-auto flex flex-col justify-between shadow-sm print:shadow-none print:border-none print:m-0 print:block" style={{ width: '210mm', height: '297mm', padding: '15mm', boxSizing: 'border-box', pageBreakAfter: 'always' }}>
+    <div className="bg-white border text-black mx-auto flex flex-col justify-between shadow-sm print:shadow-none print:border-none print:m-0 print:block" style={{ width: '210mm', minHeight: '297mm', padding: '15mm', boxSizing: 'border-box', pageBreakAfter: 'always' }}>
       <div>
         <div className="text-center mb-6 border-b-2 border-black pb-4">
           <h1 className={`text-3xl font-black ${theme?.text || 'text-blue-900'} mb-2`}>شوێنی توانا</h1>
@@ -1520,15 +1521,15 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
 
               return (
                 <tr key={item.id} className={`${item.type === 'payment' ? 'bg-emerald-50' : 'bg-white'} text-xs`}>
-                  <td className="border-2 border-black p-1 font-bold">{index + 1}</td>
-                  <td className="border-2 border-black p-1 text-right font-bold">{item.name}</td>
-                  <td className="border-2 border-black p-1 font-bold">{item.type === 'payment' ? '-' : item.quantity}</td>
-                  <td className="border-2 border-black p-1 font-bold">{item.type === 'payment' ? '-' : item.unit}</td>
-                  <td className="border-2 border-black p-1 font-bold">{priceNum.toLocaleString()}</td>
-                  <td className={`border-2 border-black p-1 font-black text-sm ${item.type === 'payment' ? 'text-emerald-600' : 'text-red-600'}`} dir="ltr">
+                  <td className="border-2 border-black p-1.5 font-bold">{index + 1}</td>
+                  <td className="border-2 border-black p-1.5 text-right font-bold">{item.name}</td>
+                  <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.quantity}</td>
+                  <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.unit}</td>
+                  <td className="border-2 border-black p-1.5 font-bold">{priceNum.toLocaleString()}</td>
+                  <td className={`border-2 border-black p-1.5 font-black text-sm ${item.type === 'payment' ? 'text-emerald-600' : 'text-red-600'}`} dir="ltr">
                     {item.type === 'payment' ? `- ${lineTotal.toLocaleString()}` : lineTotal.toLocaleString()}
                   </td>
-                  <td className="border-2 border-black p-1 font-bold text-xs text-blue-700">{item.note || '-'}</td>
+                  <td className="border-2 border-black p-1.5 font-bold text-xs text-blue-700">{item.note || '-'}</td>
                 </tr>
               );
             })}
@@ -1543,7 +1544,7 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
         <div className="flex justify-between items-end pt-4">
           <div className="flex gap-16 text-base font-bold">
             <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-            <div className="text-center"><p>ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
+            <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
           </div>
           <div className="border-4 border-black p-4 w-72 text-center bg-gray-100">
             <p className="text-base font-bold">کۆی پارەی ئەم وەسڵە</p>
