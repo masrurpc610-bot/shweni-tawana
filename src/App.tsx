@@ -200,7 +200,7 @@ export default function App() {
           html, body, #root, #app-wrapper, #content-wrapper, #main-content {
             display: block !important;
             height: auto !important;
-            min-height: auto !important;
+            min-height: 0 !important;
             max-height: none !important;
             overflow: visible !important;
             position: static !important;
@@ -209,6 +209,7 @@ export default function App() {
             padding: 0 !important;
             background: white !important;
           }
+          * { overflow: visible !important; }
           .print-hide { display: none !important; }
           ::-webkit-scrollbar { display: none; }
           input, select, textarea {
@@ -222,13 +223,18 @@ export default function App() {
           }
           .a4-page {
             width: 210mm !important;
-            min-height: 297mm !important;
+            height: 296mm !important;
             margin: 0 auto !important;
             padding: 10mm 15mm !important;
             box-sizing: border-box !important;
             background: white !important;
             color: black !important;
-            page-break-inside: avoid;
+            page-break-after: always;
+            break-after: page;
+          }
+          .a4-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
           }
         }
       `}</style>
@@ -947,7 +953,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
               const isLastPage = pIndex === totalPages - 1;
 
               return (
-                <div key={pIndex} className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8" style={{ pageBreakAfter: isLastPage ? 'auto' : 'always' }}>
+                <div key={pIndex} className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8">
                   <div>
                     <div className="text-center mb-6 border-b-2 border-black pb-4">
                       {/* ناوی وەسڵ بوو بە توانا */}
@@ -1127,16 +1133,12 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                   </div>
 
                   <div className="mt-auto">
-                    <div className="text-center mb-6 py-2 border-t border-b border-gray-300">
-                      <p className="font-bold text-sm text-gray-800">بەخێر بێن، ئێرە ماڵی هەمووتانە؛ هیوادارین لە کەموکورتییمان ببورن. سوپاس بۆ متمانەتان!</p>
-                    </div>
 
-                    <div className="flex justify-between items-end">
+                    <div className="flex justify-between items-end mt-4">
                       {isLastPage ? (
                         <>
                           <div className="flex gap-16 text-base font-bold">
                             <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-                            {/* وشەی مۆر و ئیمزای فرۆشیار زیاد کرا */}
                             <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
                           </div>
                           
@@ -1149,7 +1151,6 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                               <span>کۆی کاڵاکان:</span>
                               <span dir="ltr">{totalItemsCost.toLocaleString()}</span>
                             </div>
-                            {/* پارەی دراو بە سەوز */}
                             <div className="flex justify-between font-black text-sm mb-2 text-green-600">
                               <span>پارەی دراو (واصڵ):</span>
                               <span dir="ltr">- {totalPaymentsMade.toLocaleString()}</span>
@@ -1160,7 +1161,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                           </div>
                         </>
                       ) : (
-                        <div className="w-full flex justify-between items-center text-xs font-bold text-gray-500">
+                        <div className="w-full flex justify-between items-center text-xs font-bold text-gray-500 mt-4">
                           <span>پەڕەی {pageObj.pageNum} (درێژەی کاڵاکان...)</span>
                           <span>مۆر و ئیمزا لە پەڕەی کۆتاییدا دەبێت</span>
                         </div>
@@ -1263,10 +1264,9 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
         const isLastPage = pIndex === totalPages - 1;
 
         return (
-          <div key={pIndex} className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8" style={{ pageBreakAfter: isLastPage ? 'auto' : 'always' }}>
+          <div key={pIndex} className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8">
             <div>
               <div className="text-center mb-6 border-b-2 border-black pb-4">
-                {/* ناوی وەسڵ بوو بە توانا */}
                 <h1 className={`text-3xl font-black ${theme.text} mb-2`}>توانا</h1>
                 <p className="font-bold text-sm mb-1">بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
                 <p className="font-medium text-xs mb-1">ناونیشان: کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
@@ -1443,16 +1443,12 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
             </div>
 
             <div className="mt-auto">
-              <div className="text-center mb-6 py-2 border-t border-b border-gray-300">
-                <p className="font-bold text-sm text-gray-800">بەخێر بێن، ئێرە ماڵی هەمووتانە؛ هیوادارین لە کەموکورتییمان ببورن. سوپاس بۆ متمانەتان!</p>
-              </div>
 
-              <div className="flex justify-between items-end">
+              <div className="flex justify-between items-end mt-4">
                 {isLastPage ? (
                   <>
                     <div className="flex gap-16 text-base font-bold">
                       <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-                      {/* وشەی مۆر و ئیمزای فرۆشیار زیاد کرا */}
                       <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
                     </div>
                     
@@ -1461,14 +1457,13 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                         <span>کۆی گشتی پارە:</span>
                         <span dir="ltr" className="font-black">{totalItemsCost.toLocaleString()}</span>
                       </div>
-                      {/* پارەی دراو بە سەوز */}
                       <div className="flex justify-between items-center font-bold text-sm text-green-600">
                         <span>پارەی دراو:</span>
                         <input 
                           type="text" 
                           value={amountPaid} 
                           onChange={(e) => setAmountPaid(convertToEnglishDigits(e.target.value))} 
-                          className="w-28 text-center p-1 bg-white border border-gray-400 rounded outline-none font-black text-base text-green-700 print:border-none print:text-green-700" 
+                          className="w-28 text-center p-1 bg-white border border-gray-400 rounded outline-none font-black text-base text-green-700 print:border-none print:text-green-700 print:bg-transparent" 
                           placeholder={effectivePaid > 0 ? effectivePaid.toLocaleString() : "0"}
                           dir="ltr"
                         />
@@ -1481,7 +1476,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                     </div>
                   </>
                 ) : (
-                  <div className="w-full flex justify-between items-center text-xs font-bold text-gray-500">
+                  <div className="w-full flex justify-between items-center text-xs font-bold text-gray-500 mt-4">
                     <span>پەڕەی {pageObj.pageNum} (درێژەی کاڵاکان...)</span>
                     <span>مۆر و ئیمزا لە پەڕەی کۆتاییدا دەبێت</span>
                   </div>
@@ -1553,10 +1548,7 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
       </div>
 
       <div className="mt-auto">
-        <div className="text-center mb-6 py-2 border-t border-b border-gray-300">
-          <p className="font-bold text-sm text-gray-800">بەخێر بێن، ئێرە ماڵی هەمووتانە؛ هیوادارین لە کەموکورتییمان ببورن. سوپاس بۆ متمانەتان!</p>
-        </div>
-        <div className="flex justify-between items-end pt-4">
+        <div className="flex justify-between items-end pt-4 mt-4">
           <div className="flex gap-16 text-base font-bold">
             <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
             <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
