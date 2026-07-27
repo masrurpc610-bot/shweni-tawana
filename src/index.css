@@ -1,35 +1,98 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@300;400;600;700;900&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Noto Kufi Arabic', sans-serif;
-}
-
+/* ===== Print styles for A4 receipts ===== */
 @media print {
   @page {
-    size: A4;
-    margin: 1cm;
+    size: A4 portrait;
+    margin: 8mm;
   }
-  body {
-    background-color: white;
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12pt !important;
   }
-  body * {
-    visibility: hidden;
+
+  /* Reset the app shell so print content isn't clipped by the
+     screen layout's fixed-height / overflow-hidden containers. */
+  #root,
+  #app-wrapper,
+  #content-wrapper,
+  #main-content {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    background: #ffffff !important;
+    color: #000000 !important;
   }
-  #printable-receipt, #printable-receipt * {
-    visibility: visible;
+
+  /* Hide everything not meant for print. */
+  .print-hide,
+  aside,
+  header,
+  button,
+  nav {
+    display: none !important;
   }
-  #printable-receipt {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 210mm;
-    margin: 0;
-    padding: 0;
+
+  /* Each .a4-page is one printed page. */
+  .a4-page {
+    width: 100% !important;
+    max-width: 190mm !important;
+    min-height: 277mm !important;
+    margin: 0 auto !important;
+    padding: 4mm 6mm !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
     border: none !important;
+    border-radius: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .a4-page:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* Form fields render as plain text when printed. */
+  input,
+  textarea,
+  select {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    color: #000000 !important;
+  }
+
+  /* Make sure modals don't overlay-clamp the printed receipt. */
+  .fixed {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: none !important;
+    border-radius: 0 !important;
     box-shadow: none !important;
   }
 }
