@@ -191,28 +191,62 @@ export default function App() {
   };
 
   return (
-    <div id="app-wrapper" className={`flex h-screen transition-colors duration-300 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'} text-right`} dir="rtl">
+    <div id="app-wrapper" className={`flex h-screen transition-colors duration-300 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'} text-right print-wrapper`} dir="rtl">
       
-      {/* ئەم کۆدە سیحرییەیە کە کێشەی بڕانی پەڕەکان لە کاتی پرینتدا چارەسەر دەکات */}
+      {/* ستیایلی تایبەت بۆ چارەسەری کۆتایی کێشەی پرینت و پەڕەی بەتاڵ */}
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 0; }
-          html, body, #root, #app-wrapper, #content-wrapper, #main-content {
+          html, body, #root {
             display: block !important;
             height: auto !important;
-            min-height: auto !important;
+            min-height: 100% !important;
+            overflow: visible !important;
+            background: white !important;
+            color: black !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .print-wrapper {
+            display: block !important;
+            position: static !important;
+            height: auto !important;
             max-height: none !important;
             overflow: visible !important;
-            position: static !important;
             width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             background: white !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
+            box-shadow: none !important;
+            border: none !important;
+            transform: none !important;
           }
-          .print-hide { display: none !important; }
-          ::-webkit-scrollbar { display: none !important; }
+          .print-reset-modal {
+             width: 100% !important;
+             max-width: none !important;
+             max-height: none !important;
+             border-radius: 0 !important;
+             box-shadow: none !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .a4-page {
+            width: 210mm !important;
+            min-height: 297mm !important;
+            margin: 0 auto !important;
+            padding: 10mm 15mm !important;
+            box-sizing: border-box !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: white !important;
+            color: black !important;
+          }
+          tr { page-break-inside: avoid !important; }
           input, select, textarea {
             border: none !important;
             background: transparent !important;
@@ -222,23 +256,10 @@ export default function App() {
             -webkit-appearance: none !important;
             color: black !important;
           }
-          .a4-page {
-            width: 210mm !important;
-            min-height: 297mm !important;
-            margin: 0 auto !important;
-            padding: 10mm 15mm !important;
-            box-sizing: border-box !important;
-            background: white !important;
-            color: black !important;
-            page-break-after: always !important;
-            page-break-inside: avoid !important;
-            box-shadow: none !important;
-            border: none !important;
-          }
         }
       `}</style>
 
-      <aside className={`w-64 border-l flex flex-col transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} print-hide`}>
+      <aside className={`w-64 border-l flex flex-col transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} no-print`}>
         <div className={`h-20 flex items-center justify-center border-b gap-3 ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
           <div className={`${theme.main} p-2 rounded-lg text-white transition-colors`}><Building2 size={24} /></div>
           <div>
@@ -263,8 +284,8 @@ export default function App() {
         </nav>
       </aside>
 
-      <div id="content-wrapper" className="flex-1 flex flex-col overflow-hidden">
-        <header className={`h-16 border-b flex items-center justify-between px-8 transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} print-hide`}>
+      <div id="content-wrapper" className="flex-1 flex flex-col overflow-hidden print-wrapper">
+        <header className={`h-16 border-b flex items-center justify-between px-8 transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} no-print`}>
           <div className={`text-xl font-bold ${theme.text} transition-colors flex items-center gap-2`}>
             سیستەمی بەڕێوەبردن 
             {loading && <span className="text-xs bg-yellow-500 text-black px-2 py-1 rounded animate-pulse">لۆدکردن...</span>}
@@ -286,7 +307,7 @@ export default function App() {
           </div>
         </header>
 
-        <main id="main-content" className={`flex-1 overflow-y-auto p-8 transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+        <main id="main-content" className={`flex-1 overflow-y-auto p-8 transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'} print-wrapper`}>
           {activeTab === 'dashboard' && <DashboardView isDark={isDarkMode} timeFilter={timeFilter} setTimeFilter={setTimeFilter} customers={customers} savedReceipts={savedReceipts} onDeleteReceipt={handleDeleteSavedReceipt} onEditReceipt={handleEditSavedReceipt} theme={theme} />}
           {activeTab === 'customers' && <CustomersView isDark={isDarkMode} customers={customers} theme={theme} onAdd={handleAddCustomer} onEdit={handleEditCustomer} onDelete={handleDeleteCustomer} onOpenLedger={(c: Customer) => { setActiveCustomer(c); setActiveTab('customer-ledger'); }} />}
           {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} />}
@@ -437,14 +458,14 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="mb-8 flex justify-between items-center print-hide">
+      <div className={`mb-8 flex justify-between items-center ${showReceiptModal ? 'no-print' : 'no-print'}`}>
         <div><h2 className="text-3xl font-bold mb-2">داشبۆرد</h2><p className={isDark ? 'text-gray-400' : 'text-gray-500'}>پوختەیەکی گشتی بەپێی کاتی دیاریکراو</p></div>
         <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className={`px-4 py-2 rounded-lg font-bold outline-none cursor-pointer ${isDark ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-200 border shadow-sm'}`}>
           <option>ئەمڕۆ</option><option>ئەم هەفتەیە</option><option>ئەم مانگە</option><option>ئەم ساڵە</option><option>هەموو کات</option>
         </select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 print-hide">
+      <div className={`grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 ${showReceiptModal ? 'no-print' : 'no-print'}`}>
         <DashboardCard title="کۆی قەرزەکانمان" amount={totalDebt.toLocaleString()} suffix="د.ع" icon={ReceiptText} isDark={isDark} />
         
         <div onClick={() => setShowPaymentsModal(true)} className={`cursor-pointer hover:scale-105 transform transition-all duration-200 p-6 rounded-xl border flex flex-col items-center justify-center gap-4 ${isDark ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
@@ -467,7 +488,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
       </div>
 
       {showPaymentsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print-hide">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 no-print">
           <div className={`w-[90%] max-w-4xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">لێستی قەرزی وەرگیراوەکان (واصڵ)</h2>
@@ -493,16 +514,15 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
         </div>
       )}
 
-      {/* مۆداڵی وەسڵە نەقدییەکان - لە کاتی پرینت ئەمە نابێتە مۆداڵ، بەڵکو دەبێتە پەڕەیەکی ئاسایی */}
       {showReceiptModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print:static print:p-0 print:bg-transparent">
-          <div className={`w-[90%] max-w-5xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl print:w-full print:max-w-none print:max-h-none print:overflow-visible print:p-0 print:shadow-none print:rounded-none print:bg-transparent ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
-            <div className="flex justify-between items-center mb-6 print-hide">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print-wrapper">
+          <div className={`w-[90%] max-w-5xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl print-wrapper print-reset-modal ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
+            <div className="flex justify-between items-center mb-6 no-print">
               <h2 className="text-2xl font-bold">ئەرشیفی وەسڵە نەقدییەکان</h2>
               <button type="button" onClick={() => {setShowReceiptModal(false); setSelectedReceipt(null); setReceiptSearch('');}} className="text-red-500 hover:text-red-700 bg-red-100 p-2 rounded-lg"><X size={24}/></button>
             </div>
             {!selectedReceipt ? (
-              <div className="print-hide">
+              <div className="no-print">
                 <div className={`mb-6 flex items-center gap-3 px-4 py-3 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300 shadow-sm'}`}>
                   <Search className="text-gray-400" size={20}/>
                   <input type="text" placeholder="گەڕان بەپێی ناوی کڕیار یان مۆبایل..." className={`w-full bg-transparent outline-none font-medium ${isDark ? 'text-white' : 'text-black'}`} value={receiptSearch} onChange={(e) => setReceiptSearch(e.target.value)} />
@@ -528,7 +548,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
               </div>
             ) : (
               <div>
-                <div className="mb-4 flex gap-4 print-hide">
+                <div className="mb-4 flex gap-4 no-print">
                   <button type="button" onClick={() => setSelectedReceipt(null)} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-bold">گەڕانەوە بۆ لیست</button>
                   <button type="button" onClick={() => window.print()} className={`${theme.main} ${theme.hover} text-white px-4 py-2 rounded-lg font-bold flex gap-2`}><Printer size={20}/> چاپکردن / PDF</button>
                 </div>
@@ -599,7 +619,7 @@ function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 print-hide">
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 no-print">
       <div className={`w-[90%] max-w-4xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl ${isDark ? 'bg-gray-900 text-white' : 'bg-white text-black'}`}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">دەستکاریکردنی وەسڵ</h2>
@@ -710,17 +730,17 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-8 no-print">
         <div><h2 className="text-3xl font-bold mb-1">کڕیارەکان</h2><p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>کۆی کڕیارەکان: {customers.length}</p></div>
         <button type="button" onClick={openAddModal} className={`${theme.main} ${theme.hover} text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-md transition-colors`}><Plus size={20}/> زیادکردنی قەرزدار</button>
       </div>
 
-      <div className={`mb-6 flex items-center gap-3 px-4 py-3 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
+      <div className={`mb-6 flex items-center gap-3 px-4 py-3 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'} no-print`}>
         <Search className="text-gray-400" size={20}/>
         <input type="text" placeholder="گەڕان بەپێی ناو یان مۆبایل..." className={`w-full bg-transparent outline-none font-medium ${isDark ? 'text-white' : 'text-black'}`} value={search} onChange={(e) => setSearch(convertToEnglishDigits(e.target.value))} />
       </div>
 
-      <div className={`rounded-xl border overflow-hidden ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
+      <div className={`rounded-xl border overflow-hidden ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'} no-print`}>
         <table className="w-full text-right">
           <thead className={isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-600'}>
             <tr><th className="p-4 font-bold">ناو</th><th className="p-4 font-bold">ژمارەی مۆبایل</th><th className="p-4 font-bold">باڵانس (قەرز)</th><th className="p-4 font-bold">کردارەکان</th></tr>
@@ -743,7 +763,7 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print-hide">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 no-print">
           <div className={`w-[500px] p-6 rounded-2xl shadow-xl ${isDark ? 'bg-gray-800 text-white' : 'bg-white text-black'}`}>
             <div className="flex justify-between items-center mb-6">
               <button type="button" onClick={() => setShowModal(false)} className="text-red-500 hover:text-red-700"><X size={24}/></button>
@@ -893,8 +913,8 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
   let runningTotalDebt = 0;
 
   return (
-    <div className="w-full pb-20">
-      <div className="max-w-[210mm] mx-auto flex justify-between items-center mb-6 print-hide sticky top-0 bg-gray-100 dark:bg-gray-900 z-10 py-4 border-b border-gray-300 dark:border-gray-700">
+    <div className="w-full pb-20 print-wrapper">
+      <div className="max-w-[210mm] mx-auto flex justify-between items-center mb-6 no-print sticky top-0 bg-gray-100 dark:bg-gray-900 z-10 py-4 border-b border-gray-300 dark:border-gray-700">
         <div className="flex items-center gap-4">
           <button type="button" onClick={onBack} className="bg-gray-300 hover:bg-gray-400 text-gray-800 p-2 rounded-lg font-bold transition-colors"><ArrowRight size={24}/></button>
           <h2 className="text-2xl font-bold text-red-600">دەفتەری قەرزی ({customer.name})</h2>
@@ -935,9 +955,9 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
         }
 
         return (
-          <div key={receipt.id} className="mb-12">
+          <div key={receipt.id} className="mb-12 print-wrapper">
             
-            <div className="max-w-[210mm] mx-auto flex justify-between items-center bg-gray-300 dark:bg-gray-700 p-3 rounded-t-lg border border-b-0 border-gray-400 print-hide">
+            <div className="max-w-[210mm] mx-auto flex justify-between items-center bg-gray-300 dark:bg-gray-700 p-3 rounded-t-lg border border-b-0 border-gray-400 no-print">
               <div className="flex items-center gap-3">
                 <span className="font-bold dark:text-white">بەرواری وەسڵ:</span>
                 <input type="date" value={receipt.date ? receipt.date.split('T')[0] : ''} onChange={(e) => updateReceiptDate(receipt.id, new Date(e.target.value).toISOString())} className="p-1 rounded font-bold outline-none text-black" />
@@ -952,7 +972,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
               const isLastPage = pIndex === totalPages - 1;
 
               return (
-                <div key={pIndex} className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8">
+                <div key={pIndex} className="a4-page shadow-lg">
                   <div>
                     <div className="text-center mb-6 border-b-2 border-black pb-4">
                       {/* ناوی وەسڵ بوو بە توانا */}
@@ -984,7 +1004,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                           <th className="border-2 border-black p-1 w-24">کۆی گشتی</th>
                           <th className="border-2 border-black p-1 w-16">بەروار/کات</th>
                           <th className="border-2 border-black p-1 w-16">تێبینی</th>
-                          <th className="border-2 border-black p-1 w-6 print-hide">🗑️</th>
+                          <th className="border-2 border-black p-1 w-6 no-print">🗑️</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1052,7 +1072,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                               
                               <td className="border-2 border-black p-0.5">
                                 {item.type === 'payment' ? <span className="text-gray-400 font-bold">-</span> : (
-                                  <select value={item.unit} onChange={(e) => updateItem(receipt.id, item.id, 'unit', e.target.value)} className="w-full text-center bg-transparent outline-none font-bold text-[10px] print:appearance-none">
+                                  <select value={item.unit} onChange={(e) => updateItem(receipt.id, item.id, 'unit', e.target.value)} className="w-full text-center bg-transparent outline-none font-bold text-[10px]">
                                     <option>دانە</option><option>مەتر</option><option>کیلۆ</option><option>کارتۆن</option><option>دەرزەن</option><option>قوتوو</option>
                                   </select>
                                 )}
@@ -1097,7 +1117,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                                          addItem(receipt.id); 
                                        } 
                                      }}
-                                     className="w-full text-center bg-transparent outline-none font-bold text-[10px] text-blue-700 print:appearance-none"
+                                     className="w-full text-center bg-transparent outline-none font-bold text-[10px] text-blue-700"
                                    >
                                      <option value="زیاد کریم">زیاد کریم</option>
                                      <option value="زانا زیاد">زانا زیاد</option>
@@ -1121,7 +1141,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                                 )}
                               </td>
 
-                              <td className="border-2 border-black p-0.5 print-hide">
+                              <td className="border-2 border-black p-0.5 no-print">
                                 <button type="button" onClick={() => removeItem(receipt.id, item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14}/></button>
                               </td>
                             </tr>
@@ -1132,13 +1152,12 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                   </div>
 
                   <div className="mt-auto">
-                    {/* لابردنی نووسینی "بەخێر بێن..." بە یەکجاری! */}
-
                     <div className="flex justify-between items-end mt-4">
                       {isLastPage ? (
                         <>
                           <div className="flex gap-16 text-base font-bold">
                             <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
+                            {/* وشەی مۆر و ئیمزای فرۆشیار زیاد کرا */}
                             <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
                           </div>
                           
@@ -1151,7 +1170,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                               <span>کۆی کاڵاکان:</span>
                               <span dir="ltr">{totalItemsCost.toLocaleString()}</span>
                             </div>
-                            {/* وشەی پارەی دراو بە سەوز */}
+                            {/* پارەی دراو بە سەوز */}
                             <div className="flex justify-between font-black text-sm mb-2 text-green-600">
                               <span>پارەی دراو (واصڵ):</span>
                               <span dir="ltr">- {totalPaymentsMade.toLocaleString()}</span>
@@ -1251,8 +1270,8 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
   }
 
   return (
-    <div className="w-full pb-20">
-      <div className="max-w-[210mm] mx-auto flex justify-between items-center mb-6 print-hide">
+    <div className="w-full pb-20 print-wrapper">
+      <div className="max-w-[210mm] mx-auto flex justify-between items-center mb-6 no-print">
         <h2 className={`text-2xl font-bold ${theme.text}`}>دروستکردنی وەسڵی نەقدی</h2>
         <div className="flex gap-4">
           <button type="button" onClick={startNewReceipt} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus size={20}/> وەسڵی نوێ</button>
@@ -1265,7 +1284,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
         const isLastPage = pIndex === totalPages - 1;
 
         return (
-          <div key={pIndex} id="printable-receipt" className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8">
+          <div key={pIndex} id="printable-receipt" className="a4-page shadow-lg">
             <div>
               <div className="text-center mb-6 border-b-2 border-black pb-4">
                 {/* ناوی وەسڵ بوو بە توانا */}
@@ -1297,7 +1316,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                     <th className="border-2 border-black p-1 w-24">کۆی گشتی</th>
                     <th className="border-2 border-black p-1 w-16">بەروار و کات</th>
                     <th className="border-2 border-black p-1 w-16">تێبینی</th>
-                    <th className="border-2 border-black p-1 w-6 print-hide">🗑️</th>
+                    <th className="border-2 border-black p-1 w-6 no-print">🗑️</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1365,7 +1384,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                         
                         <td className="border-2 border-black p-0.5">
                           {item.type === 'payment' ? <span className="text-gray-400 font-bold">-</span> : (
-                            <select value={item.unit} onChange={(e) => updateItem(item.id, 'unit', e.target.value)} className="w-full text-center bg-transparent outline-none font-bold text-[10px] print:appearance-none">
+                            <select value={item.unit} onChange={(e) => updateItem(item.id, 'unit', e.target.value)} className="w-full text-center bg-transparent outline-none font-bold text-[10px]">
                               <option>دانە</option><option>مەتر</option><option>کیلۆ</option><option>کارتۆن</option><option>دەرزەن</option><option>قوتوو</option>
                             </select>
                           )}
@@ -1410,7 +1429,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                                    addItem(); 
                                  } 
                                }}
-                               className="w-full text-center bg-transparent outline-none font-bold text-[10px] text-blue-700 print:appearance-none"
+                               className="w-full text-center bg-transparent outline-none font-bold text-[10px] text-blue-700"
                              >
                                <option value="زیاد کریم">زیاد کریم</option>
                                <option value="زانا زیاد">زانا زیاد</option>
@@ -1434,7 +1453,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                           )}
                         </td>
 
-                        <td className="border-2 border-black p-0.5 print-hide">
+                        <td className="border-2 border-black p-0.5 no-print">
                           <button type="button" onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14}/></button>
                         </td>
                       </tr>
@@ -1445,13 +1464,12 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
             </div>
 
             <div className="mt-auto">
-              {/* لابردنی نووسینی بەخێربێن */}
-              
               <div className="flex justify-between items-end mt-4">
                 {isLastPage ? (
                   <>
                     <div className="flex gap-16 text-base font-bold">
                       <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
+                      {/* وشەی مۆر و ئیمزای فرۆشیار زیاد کرا */}
                       <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
                     </div>
                     
@@ -1460,13 +1478,14 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                         <span>کۆی گشتی پارە:</span>
                         <span dir="ltr" className="font-black">{totalItemsCost.toLocaleString()}</span>
                       </div>
+                      {/* پارەی دراو بە سەوز */}
                       <div className="flex justify-between items-center font-bold text-sm text-green-600">
                         <span>پارەی دراو:</span>
                         <input 
                           type="text" 
                           value={amountPaid} 
                           onChange={(e) => setAmountPaid(convertToEnglishDigits(e.target.value))} 
-                          className="w-28 text-center p-1 bg-white border border-gray-400 rounded outline-none font-black text-base text-green-700 print:border-none print:bg-transparent" 
+                          className="w-28 text-center p-1 bg-transparent border-none outline-none font-black text-base text-green-700" 
                           placeholder={effectivePaid > 0 ? effectivePaid.toLocaleString() : "0"}
                           dir="ltr"
                         />
@@ -1496,7 +1515,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
 
 function StaticReceiptTemplate({ receipt, theme }: any) {
   return (
-    <div className="a4-page bg-white border text-black mx-auto flex flex-col justify-between shadow-sm">
+    <div className="a4-page shadow-sm mx-auto flex flex-col justify-between">
       <div>
         <div className="text-center mb-6 border-b-2 border-black pb-4">
           <h1 className={`text-3xl font-black ${theme?.text || 'text-blue-900'} mb-2`}>توانا</h1>
