@@ -195,9 +195,32 @@ export default function App() {
       
       <style>{`
         @media print {
-          @page { margin: 0; }
-          body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          /* ئەمە بۆ ئەوەیە لاپەڕەکان لە کاتی چاپکردن نەبڕدرێن */
+          @page { margin: 0; size: auto; }
+          body, html, #root { 
+            height: auto !important; 
+            overflow: visible !important; 
+            margin: 0 !important;
+            padding: 0 !important;
+            background-color: white !important;
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact;
+          }
+          /* This removes the browser header/footer URLs */
+          @page { margin-top: 0; margin-bottom: 0; }
+          
+          /* Hide scrollbars */
+          ::-webkit-scrollbar { display: none; }
+          
+          /* Force inputs to look like normal text in print */
+          input, select, textarea {
+            appearance: none;
+            -webkit-appearance: none;
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            color: black !important;
+            resize: none;
+          }
         }
       `}</style>
 
@@ -226,7 +249,7 @@ export default function App() {
         </nav>
       </aside>
 
-      <div className="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible">
+      <div className="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible print:h-auto">
         <header className={`h-16 border-b flex items-center justify-between px-8 transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} print:hidden`}>
           <div className={`text-xl font-bold ${theme.text} transition-colors flex items-center gap-2`}>
             سیستەمی بەڕێوەبردن 
@@ -249,7 +272,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className={`flex-1 overflow-y-auto p-8 print:p-0 print:bg-white print:block print:overflow-visible transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+        <main className={`flex-1 overflow-y-auto p-8 print:p-0 print:m-0 print:bg-white print:block print:overflow-visible print:h-auto transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
           {activeTab === 'dashboard' && <DashboardView isDark={isDarkMode} timeFilter={timeFilter} setTimeFilter={setTimeFilter} customers={customers} savedReceipts={savedReceipts} onDeleteReceipt={handleDeleteSavedReceipt} onEditReceipt={handleEditSavedReceipt} theme={theme} />}
           {activeTab === 'customers' && <CustomersView isDark={isDarkMode} customers={customers} theme={theme} onAdd={handleAddCustomer} onEdit={handleEditCustomer} onDelete={handleDeleteCustomer} onOpenLedger={(c: Customer) => { setActiveCustomer(c); setActiveTab('customer-ledger'); }} />}
           {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} />}
@@ -856,7 +879,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
 
   return (
     <div className="w-full flex flex-col items-center pb-20 print:pb-0 print:block">
-      <div className="w-[210mm] print:w-full flex justify-between items-center mb-6 print:hidden sticky top-0 bg-gray-100 dark:bg-gray-900 z-10 py-4 border-b border-gray-300 dark:border-gray-700">
+      <div className="w-full max-w-[210mm] print:w-full flex justify-between items-center mb-6 print:hidden sticky top-0 bg-gray-100 dark:bg-gray-900 z-10 py-4 border-b border-gray-300 dark:border-gray-700">
         <div className="flex items-center gap-4">
           <button type="button" onClick={onBack} className="bg-gray-300 hover:bg-gray-400 text-gray-800 p-2 rounded-lg font-bold transition-colors"><ArrowRight size={24}/></button>
           <h2 className="text-2xl font-bold text-red-600">دەفتەری قەرزی ({customer.name})</h2>
@@ -897,7 +920,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
         }
 
         return (
-          <div key={receipt.id} className="mb-12 print:mb-0 w-[210mm] print:w-full print:block">
+          <div key={receipt.id} className="mb-12 print:mb-0 w-full max-w-[210mm] print:max-w-none print:w-full print:block">
             
             <div className="flex justify-between items-center bg-gray-300 dark:bg-gray-700 p-3 rounded-t-lg border border-b-0 border-gray-400 print:hidden">
               <div className="flex items-center gap-3">
@@ -914,7 +937,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
               const isLastPage = pIndex === totalPages - 1;
 
               return (
-                <div key={pIndex} className="bg-white border p-12 text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:mb-0 print:border-none print:shadow-none print:block" style={{ width: '210mm', minHeight: '297mm', pageBreakAfter: 'always' }}>
+                <div key={pIndex} className="bg-white border text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:m-0 print:border-none print:shadow-none print:block" style={{ width: '210mm', height: '297mm', padding: '15mm', boxSizing: 'border-box', pageBreakAfter: 'always' }}>
                   <div>
                     <div className="text-center mb-6 border-b-2 border-black pb-4">
                       <h1 className={`text-3xl font-black ${theme.text} mb-2`}>شوێنی توانا</h1>
@@ -937,15 +960,15 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                     <table className="w-full border-collapse border-2 border-black text-center mt-2">
                       <thead>
                         <tr className="bg-gray-200 text-xs">
-                          <th className="border-2 border-black p-1.5 w-6">#</th>
-                          <th className="border-2 border-black p-1.5 text-right w-1/3">ناوی کاڵا / جۆری پارەدان</th>
-                          <th className="border-2 border-black p-1.5 w-10">بڕ</th>
-                          <th className="border-2 border-black p-1.5 w-14">یەکە</th>
-                          <th className="border-2 border-black p-1.5 w-20">نرخ / پارە</th>
-                          <th className="border-2 border-black p-1.5 w-24">کۆی گشتی</th>
-                          <th className="border-2 border-black p-1.5 w-16">بەروار/کات</th>
-                          <th className="border-2 border-black p-1.5 w-16">تێبینی</th>
-                          <th className="border-2 border-black p-1.5 w-6 print:hidden">🗑️</th>
+                          <th className="border-2 border-black p-1 w-6">#</th>
+                          <th className="border-2 border-black p-1 text-right w-1/3">ناوی کاڵا / جۆری پارەدان</th>
+                          <th className="border-2 border-black p-1 w-10">بڕ</th>
+                          <th className="border-2 border-black p-1 w-14">یەکە</th>
+                          <th className="border-2 border-black p-1 w-20">نرخ / پارە</th>
+                          <th className="border-2 border-black p-1 w-24">کۆی گشتی</th>
+                          <th className="border-2 border-black p-1 w-16">بەروار/کات</th>
+                          <th className="border-2 border-black p-1 w-16">تێبینی</th>
+                          <th className="border-2 border-black p-1 w-6 print:hidden">🗑️</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -957,9 +980,9 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
 
                           return (
                             <tr key={item.id} className={`${item.type === 'payment' ? 'bg-emerald-50' : 'bg-white'} text-xs`}>
-                              <td className="border-2 border-black p-1 font-bold">{globalIdx + 1}</td>
+                              <td className="border-2 border-black p-0.5 font-bold">{globalIdx + 1}</td>
                               
-                              <td className="border-2 border-black p-1">
+                              <td className="border-2 border-black p-0.5">
                                 <input 
                                   type="text" 
                                   value={item.name} 
@@ -976,7 +999,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                                 />
                               </td>
                               
-                              <td className="border-2 border-black p-1">
+                              <td className="border-2 border-black p-0.5">
                                 {item.type === 'payment' ? (
                                   <input 
                                     id={`qty-${receipt.id}-${item.id}`}
@@ -1011,7 +1034,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                                 )}
                               </td>
                               
-                              <td className="border-2 border-black p-1">
+                              <td className="border-2 border-black p-0.5">
                                 {item.type === 'payment' ? <span className="text-gray-400 font-bold">-</span> : (
                                   <select value={item.unit} onChange={(e) => updateItem(receipt.id, item.id, 'unit', e.target.value)} className="w-full text-center bg-transparent outline-none font-bold text-[10px] print:appearance-none">
                                     <option>دانە</option><option>مەتر</option><option>کیلۆ</option><option>کارتۆن</option><option>دەرزەن</option><option>قوتوو</option>
@@ -1019,7 +1042,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                                 )}
                               </td>
                               
-                              <td className="border-2 border-black p-1">
+                              <td className="border-2 border-black p-0.5">
                                 <input 
                                   id={`price-${receipt.id}-${item.id}`}
                                   type="text" 
@@ -1037,16 +1060,16 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                                 />
                               </td>
                               
-                              <td className={`border-2 border-black p-1 font-black text-xs ${item.type === 'payment' ? 'text-emerald-600' : 'text-red-600'}`} dir="ltr">
+                              <td className={`border-2 border-black p-0.5 font-black text-xs ${item.type === 'payment' ? 'text-emerald-600' : 'text-red-600'}`} dir="ltr">
                                 {item.type === 'payment' ? `- ${Math.abs(lineTotal).toLocaleString()}` : lineTotal.toLocaleString()}
                               </td>
 
-                              <td className="border-2 border-black p-1 text-[9px] font-bold text-gray-700 leading-tight">
+                              <td className="border-2 border-black p-0.5 text-[9px] font-bold text-gray-700 leading-tight">
                                 <div dir="ltr">{item.dateStr || '26/07/2026'}</div>
                                 <div dir="ltr" className="text-gray-500">{item.timeStr || '12:30'}</div>
                               </td>
                               
-                              <td className="border-2 border-black p-1">
+                              <td className="border-2 border-black p-0.5">
                                 {item.type === 'payment' ? (
                                    <select 
                                      id={`note-${receipt.id}-${item.id}`}
@@ -1082,7 +1105,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                                 )}
                               </td>
 
-                              <td className="border-2 border-black p-1 print:hidden">
+                              <td className="border-2 border-black p-0.5 print:hidden">
                                 <button type="button" onClick={() => removeItem(receipt.id, item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14}/></button>
                               </td>
                             </tr>
@@ -1093,12 +1116,16 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                   </div>
 
                   <div className="mt-auto">
-                    <div className="flex justify-between items-end pt-4">
+                    <div className="text-center mb-6 py-2 border-t border-b border-gray-300">
+                      <p className="font-bold text-sm text-gray-800">بەخێر بێن، ئێرە ماڵی هەمووتانە؛ هیوادارین لە کەموکورتییمان ببورن. سوپاس بۆ متمانەتان!</p>
+                    </div>
+
+                    <div className="flex justify-between items-end">
                       {isLastPage ? (
                         <>
                           <div className="flex gap-16 text-base font-bold">
                             <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-                            <div className="text-center"><p>مۆری فرۆشگا</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
+                            <div className="text-center"><p>ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
                           </div>
                           
                           <div className="border-4 border-black p-4 w-72 text-center bg-gray-100">
@@ -1210,7 +1237,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
 
   return (
     <div className="w-full flex flex-col items-center pb-20 print:pb-0 print:block">
-      <div className="w-[210mm] print:w-full flex justify-between items-center mb-6 print:hidden">
+      <div className="w-full max-w-[210mm] print:w-full flex justify-between items-center mb-6 print:hidden">
         <h2 className={`text-2xl font-bold ${theme.text}`}>دروستکردنی وەسڵی نەقدی</h2>
         <div className="flex gap-4">
           <button type="button" onClick={startNewReceipt} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus size={20}/> وەسڵی نوێ</button>
@@ -1223,7 +1250,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
         const isLastPage = pIndex === totalPages - 1;
 
         return (
-          <div key={pIndex} id="printable-receipt" className="bg-white border p-12 text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:mb-0 print:border-none print:shadow-none print:block" style={{ width: '210mm', minHeight: '297mm', pageBreakAfter: 'always' }}>
+          <div key={pIndex} id="printable-receipt" className="bg-white border text-black shadow-lg mx-auto flex flex-col justify-between mb-8 print:m-0 print:border-none print:shadow-none print:block" style={{ width: '210mm', height: '297mm', padding: '15mm', boxSizing: 'border-box', pageBreakAfter: 'always' }}>
             <div>
               <div className="text-center mb-6 border-b-2 border-black pb-4">
                 <h1 className={`text-3xl font-black ${theme.text} mb-2`}>شوێنی توانا</h1>
@@ -1246,15 +1273,15 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
               <table className="w-full border-collapse border-2 border-black text-center mt-2">
                 <thead>
                   <tr className="bg-gray-200 text-xs">
-                    <th className="border-2 border-black p-1.5 w-6">#</th>
-                    <th className="border-2 border-black p-1.5 text-right w-1/3">ناوی کاڵا / جۆری پارەدان</th>
-                    <th className="border-2 border-black p-1.5 w-10">بڕ</th>
-                    <th className="border-2 border-black p-1.5 w-14">یەکە</th>
-                    <th className="border-2 border-black p-1.5 w-20">نرخ / پارە</th>
-                    <th className="border-2 border-black p-1.5 w-24">کۆی گشتی</th>
-                    <th className="border-2 border-black p-1.5 w-16">بەروار و کات</th>
-                    <th className="border-2 border-black p-1.5 w-16">تێبینی</th>
-                    <th className="border-2 border-black p-1.5 w-6 print:hidden">🗑️</th>
+                    <th className="border-2 border-black p-1 w-6">#</th>
+                    <th className="border-2 border-black p-1 text-right w-1/3">ناوی کاڵا / جۆری پارەدان</th>
+                    <th className="border-2 border-black p-1 w-10">بڕ</th>
+                    <th className="border-2 border-black p-1 w-14">یەکە</th>
+                    <th className="border-2 border-black p-1 w-20">نرخ / پارە</th>
+                    <th className="border-2 border-black p-1 w-24">کۆی گشتی</th>
+                    <th className="border-2 border-black p-1 w-16">بەروار و کات</th>
+                    <th className="border-2 border-black p-1 w-16">تێبینی</th>
+                    <th className="border-2 border-black p-1 w-6 print:hidden">🗑️</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1266,9 +1293,9 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
 
                     return (
                       <tr key={item.id} className={`${item.type === 'payment' ? 'bg-emerald-50' : 'bg-white'} text-xs`}>
-                        <td className="border-2 border-black p-1 font-bold">{globalIdx + 1}</td>
+                        <td className="border-2 border-black p-0.5 font-bold">{globalIdx + 1}</td>
                         
-                        <td className="border-2 border-black p-1">
+                        <td className="border-2 border-black p-0.5">
                           <input 
                             type="text" 
                             value={item.name} 
@@ -1285,7 +1312,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                           />
                         </td>
                         
-                        <td className="border-2 border-black p-1">
+                        <td className="border-2 border-black p-0.5">
                           {item.type === 'payment' ? (
                             <input 
                               id={`cash-qty-${item.id}`}
@@ -1320,7 +1347,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                           )}
                         </td>
                         
-                        <td className="border-2 border-black p-1">
+                        <td className="border-2 border-black p-0.5">
                           {item.type === 'payment' ? <span className="text-gray-400 font-bold">-</span> : (
                             <select value={item.unit} onChange={(e) => updateItem(item.id, 'unit', e.target.value)} className="w-full text-center bg-transparent outline-none font-bold text-[10px] print:appearance-none">
                               <option>دانە</option><option>مەتر</option><option>کیلۆ</option><option>کارتۆن</option><option>دەرزەن</option><option>قوتوو</option>
@@ -1328,7 +1355,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                           )}
                         </td>
                         
-                        <td className="border-2 border-black p-1">
+                        <td className="border-2 border-black p-0.5">
                           <input 
                             id={`cash-price-${item.id}`}
                             type="text" 
@@ -1346,16 +1373,16 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                           />
                         </td>
                         
-                        <td className={`border-2 border-black p-1 font-black text-xs ${item.type === 'payment' ? 'text-emerald-600' : 'text-red-600'}`} dir="ltr">
+                        <td className={`border-2 border-black p-0.5 font-black text-xs ${item.type === 'payment' ? 'text-emerald-600' : 'text-red-600'}`} dir="ltr">
                           {item.type === 'payment' ? `- ${lineTotal.toLocaleString()}` : lineTotal.toLocaleString()}
                         </td>
 
-                        <td className="border-2 border-black p-1 text-[9px] font-bold text-gray-700 leading-tight">
+                        <td className="border-2 border-black p-0.5 text-[9px] font-bold text-gray-700 leading-tight">
                           <div dir="ltr">{item.dateStr || '26/07/2026'}</div>
                           <div dir="ltr" className="text-gray-500">{item.timeStr || '12:30'}</div>
                         </td>
                         
-                        <td className="border-2 border-black p-1">
+                        <td className="border-2 border-black p-0.5">
                           {item.type === 'payment' ? (
                              <select 
                                id={`cash-note-${item.id}`}
@@ -1391,7 +1418,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                           )}
                         </td>
 
-                        <td className="border-2 border-black p-1 print:hidden">
+                        <td className="border-2 border-black p-0.5 print:hidden">
                           <button type="button" onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14}/></button>
                         </td>
                       </tr>
@@ -1402,12 +1429,16 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
             </div>
 
             <div className="mt-auto">
-              <div className="flex justify-between items-end pt-4">
+              <div className="text-center mb-6 py-2 border-t border-b border-gray-300">
+                <p className="font-bold text-sm text-gray-800">بەخێر بێن، ئێرە ماڵی هەمووتانە؛ هیوادارین لە کەموکورتییمان ببورن. سوپاس بۆ متمانەتان!</p>
+              </div>
+
+              <div className="flex justify-between items-end">
                 {isLastPage ? (
                   <>
                     <div className="flex gap-16 text-base font-bold">
                       <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-                      <div className="text-center"><p>مۆری فرۆشگا</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
+                      <div className="text-center"><p>ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
                     </div>
                     
                     <div className="border-4 border-black p-4 w-80 text-center bg-gray-100 space-y-2">
@@ -1451,7 +1482,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
 
 function StaticReceiptTemplate({ receipt, theme }: any) {
   return (
-    <div className="bg-white border p-12 text-black mx-auto flex flex-col justify-between shadow-sm print:shadow-none print:border-none print:p-0 print:block" style={{ width: '210mm', minHeight: '297mm' }}>
+    <div className="bg-white border text-black mx-auto flex flex-col justify-between shadow-sm print:shadow-none print:border-none print:m-0 print:block" style={{ width: '210mm', height: '297mm', padding: '15mm', boxSizing: 'border-box', pageBreakAfter: 'always' }}>
       <div>
         <div className="text-center mb-6 border-b-2 border-black pb-4">
           <h1 className={`text-3xl font-black ${theme?.text || 'text-blue-900'} mb-2`}>شوێنی توانا</h1>
@@ -1472,13 +1503,13 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
         <table className="w-full border-collapse border-2 border-black text-center mt-2">
           <thead>
             <tr className="bg-gray-200 text-xs">
-              <th className="border-2 border-black p-1.5 w-6">#</th>
-              <th className="border-2 border-black p-1.5 text-right">ناوی ماددە (کاڵا) / پارەدان</th>
-              <th className="border-2 border-black p-1.5 w-10">بڕ</th>
-              <th className="border-2 border-black p-1.5 w-16">یەکە</th>
-              <th className="border-2 border-black p-1.5 w-20">نرخی دانە</th>
-              <th className="border-2 border-black p-1.5 w-24">کۆی گشتی</th>
-              <th className="border-2 border-black p-1.5 w-28">تێبینی</th>
+              <th className="border-2 border-black p-1 w-6">#</th>
+              <th className="border-2 border-black p-1 text-right">ناوی ماددە (کاڵا) / پارەدان</th>
+              <th className="border-2 border-black p-1 w-10">بڕ</th>
+              <th className="border-2 border-black p-1 w-16">یەکە</th>
+              <th className="border-2 border-black p-1 w-20">نرخی دانە</th>
+              <th className="border-2 border-black p-1 w-24">کۆی گشتی</th>
+              <th className="border-2 border-black p-1 w-28">تێبینی</th>
             </tr>
           </thead>
           <tbody>
@@ -1489,15 +1520,15 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
 
               return (
                 <tr key={item.id} className={`${item.type === 'payment' ? 'bg-emerald-50' : 'bg-white'} text-xs`}>
-                  <td className="border-2 border-black p-1.5 font-bold">{index + 1}</td>
-                  <td className="border-2 border-black p-1.5 text-right font-bold">{item.name}</td>
-                  <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.quantity}</td>
-                  <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.unit}</td>
-                  <td className="border-2 border-black p-1.5 font-bold">{priceNum.toLocaleString()}</td>
-                  <td className={`border-2 border-black p-1.5 font-black text-sm ${item.type === 'payment' ? 'text-emerald-600' : 'text-red-600'}`} dir="ltr">
+                  <td className="border-2 border-black p-1 font-bold">{index + 1}</td>
+                  <td className="border-2 border-black p-1 text-right font-bold">{item.name}</td>
+                  <td className="border-2 border-black p-1 font-bold">{item.type === 'payment' ? '-' : item.quantity}</td>
+                  <td className="border-2 border-black p-1 font-bold">{item.type === 'payment' ? '-' : item.unit}</td>
+                  <td className="border-2 border-black p-1 font-bold">{priceNum.toLocaleString()}</td>
+                  <td className={`border-2 border-black p-1 font-black text-sm ${item.type === 'payment' ? 'text-emerald-600' : 'text-red-600'}`} dir="ltr">
                     {item.type === 'payment' ? `- ${lineTotal.toLocaleString()}` : lineTotal.toLocaleString()}
                   </td>
-                  <td className="border-2 border-black p-1.5 font-bold text-xs text-blue-700">{item.note || '-'}</td>
+                  <td className="border-2 border-black p-1 font-bold text-xs text-blue-700">{item.note || '-'}</td>
                 </tr>
               );
             })}
@@ -1506,10 +1537,13 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
       </div>
 
       <div className="mt-auto">
+        <div className="text-center mb-6 py-2 border-t border-b border-gray-300">
+          <p className="font-bold text-sm text-gray-800">بەخێر بێن، ئێرە ماڵی هەمووتانە؛ هیوادارین لە کەموکورتییمان ببورن. سوپاس بۆ متمانەتان!</p>
+        </div>
         <div className="flex justify-between items-end pt-4">
           <div className="flex gap-16 text-base font-bold">
             <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-            <div className="text-center"><p>مۆر و ئیمزا</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
+            <div className="text-center"><p>ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
           </div>
           <div className="border-4 border-black p-4 w-72 text-center bg-gray-100">
             <p className="text-base font-bold">کۆی پارەی ئەم وەسڵە</p>
