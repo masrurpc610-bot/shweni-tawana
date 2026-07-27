@@ -94,7 +94,7 @@ export default function App() {
   }, [isDarkMode]);
 
   if (!currentUser) {
-    return <LoginScreen theme={theme} isDark={isDarkMode} setIsDark={setIsDark} onLogin={(username: string) => {
+    return <LoginScreen theme={theme} isDark={isDarkMode} setIsDark={setIsDarkMode} onLogin={(username: string) => {
       localStorage.setItem('shweni_tawana_user', username);
       setCurrentUser(username);
     }} />;
@@ -193,62 +193,47 @@ export default function App() {
   return (
     <div id="app-wrapper" className={`flex h-screen transition-colors duration-300 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'} text-right`} dir="rtl">
       
-      {/* ستايلی تەواوی پرینت - چارەسەری ئوتۆماتیکی بۆ چاپکردن */}
+      {/* ئەم کۆدە سیحرییەیە کە کێشەی بڕانی پەڕەکان لە کاتی پرینتدا چارەسەر دەکات */}
       <style>{`
         @media print {
-          @page {
-            size: A4 portrait;
-            margin: 5mm;
-          }
-          
-          body, html, #root, #app-wrapper, #content-wrapper, #main-content {
-            background: white !important;
-            color: black !important;
+          @page { size: A4 portrait; margin: 0; }
+          html, body, #root, #app-wrapper, #content-wrapper, #main-content {
+            display: block !important;
             height: auto !important;
-            min-height: 0 !important;
+            min-height: auto !important;
             max-height: none !important;
             overflow: visible !important;
             position: static !important;
             width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
-            display: block !important;
-          }
-
-          .print-hide, aside, header, button, select {
-            display: none !important;
-          }
-
-          .a4-page {
-            width: 100% !important;
-            max-width: 210mm !important;
-            min-height: 285mm !important;
-            margin: 0 auto !important;
-            padding: 5mm 8mm !important;
-            box-sizing: border-box !important;
             background: white !important;
-            color: black !important;
-            page-break-after: always;
-            break-after: page;
-            box-shadow: none !important;
-            border: none !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: space-between !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
-
-          .a4-page:last-child {
-            page-break-after: avoid !important;
-            break-after: avoid !important;
-          }
-
-          input, textarea {
+          .print-hide { display: none !important; }
+          ::-webkit-scrollbar { display: none !important; }
+          input, select, textarea {
             border: none !important;
             background: transparent !important;
             box-shadow: none !important;
             outline: none !important;
             appearance: none !important;
+            -webkit-appearance: none !important;
             color: black !important;
+          }
+          .a4-page {
+            width: 210mm !important;
+            min-height: 297mm !important;
+            margin: 0 auto !important;
+            padding: 10mm 15mm !important;
+            box-sizing: border-box !important;
+            background: white !important;
+            color: black !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+            box-shadow: none !important;
+            border: none !important;
           }
         }
       `}</style>
@@ -326,7 +311,7 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
         (username === 'masrour' && password === '123456')) {
       onLogin(username);
     } else {
-      setErrorMsg('ناوی بەکارهێنەر یان پاسۆرد هەڵەیە!');
+      setErrorMsg('ناوی بەکارهێنەر یان تێپەڕوشە هەڵەیە!');
     }
   };
 
@@ -508,6 +493,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
         </div>
       )}
 
+      {/* مۆداڵی وەسڵە نەقدییەکان - لە کاتی پرینت ئەمە نابێتە مۆداڵ، بەڵکو دەبێتە پەڕەیەکی ئاسایی */}
       {showReceiptModal && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print:static print:p-0 print:bg-transparent">
           <div className={`w-[90%] max-w-5xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl print:w-full print:max-w-none print:max-h-none print:overflow-visible print:p-0 print:shadow-none print:rounded-none print:bg-transparent ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
@@ -969,6 +955,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                 <div key={pIndex} className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8">
                   <div>
                     <div className="text-center mb-6 border-b-2 border-black pb-4">
+                      {/* ناوی وەسڵ بوو بە توانا */}
                       <h1 className={`text-3xl font-black ${theme.text} mb-2`}>توانا</h1>
                       <p className="font-bold text-sm mb-1">بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
                       <p className="font-medium text-xs mb-1">ناونیشان: کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
@@ -1145,6 +1132,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                   </div>
 
                   <div className="mt-auto">
+                    {/* لابردنی نووسینی "بەخێر بێن..." بە یەکجاری! */}
 
                     <div className="flex justify-between items-end mt-4">
                       {isLastPage ? (
@@ -1163,6 +1151,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                               <span>کۆی کاڵاکان:</span>
                               <span dir="ltr">{totalItemsCost.toLocaleString()}</span>
                             </div>
+                            {/* وشەی پارەی دراو بە سەوز */}
                             <div className="flex justify-between font-black text-sm mb-2 text-green-600">
                               <span>پارەی دراو (واصڵ):</span>
                               <span dir="ltr">- {totalPaymentsMade.toLocaleString()}</span>
@@ -1173,7 +1162,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                           </div>
                         </>
                       ) : (
-                        <div className="w-full flex justify-between items-center text-xs font-bold text-gray-500 mt-4">
+                        <div className="w-full flex justify-between items-center text-xs font-bold text-gray-500">
                           <span>پەڕەی {pageObj.pageNum} (درێژەی کاڵاکان...)</span>
                           <span>مۆر و ئیمزا لە پەڕەی کۆتاییدا دەبێت</span>
                         </div>
@@ -1276,9 +1265,10 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
         const isLastPage = pIndex === totalPages - 1;
 
         return (
-          <div key={pIndex} className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8">
+          <div key={pIndex} id="printable-receipt" className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8">
             <div>
               <div className="text-center mb-6 border-b-2 border-black pb-4">
+                {/* ناوی وەسڵ بوو بە توانا */}
                 <h1 className={`text-3xl font-black ${theme.text} mb-2`}>توانا</h1>
                 <p className="font-bold text-sm mb-1">بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
                 <p className="font-medium text-xs mb-1">ناونیشان: کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
@@ -1455,7 +1445,8 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
             </div>
 
             <div className="mt-auto">
-
+              {/* لابردنی نووسینی بەخێربێن */}
+              
               <div className="flex justify-between items-end mt-4">
                 {isLastPage ? (
                   <>
@@ -1475,7 +1466,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                           type="text" 
                           value={amountPaid} 
                           onChange={(e) => setAmountPaid(convertToEnglishDigits(e.target.value))} 
-                          className="w-28 text-center p-1 bg-white border border-gray-400 rounded outline-none font-black text-base text-green-700 print:border-none print:text-green-700 print:bg-transparent" 
+                          className="w-28 text-center p-1 bg-white border border-gray-400 rounded outline-none font-black text-base text-green-700 print:border-none print:bg-transparent" 
                           placeholder={effectivePaid > 0 ? effectivePaid.toLocaleString() : "0"}
                           dir="ltr"
                         />
@@ -1488,7 +1479,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                     </div>
                   </>
                 ) : (
-                  <div className="w-full flex justify-between items-center text-xs font-bold text-gray-500 mt-4">
+                  <div className="w-full flex justify-between items-center text-xs font-bold text-gray-500">
                     <span>پەڕەی {pageObj.pageNum} (درێژەی کاڵاکان...)</span>
                     <span>مۆر و ئیمزا لە پەڕەی کۆتاییدا دەبێت</span>
                   </div>
@@ -1560,7 +1551,7 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
       </div>
 
       <div className="mt-auto">
-        <div className="flex justify-between items-end pt-4 mt-4">
+        <div className="flex justify-between items-end mt-4">
           <div className="flex gap-16 text-base font-bold">
             <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
             <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
