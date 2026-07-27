@@ -94,7 +94,7 @@ export default function App() {
   }, [isDarkMode]);
 
   if (!currentUser) {
-    return <LoginScreen theme={theme} isDark={isDarkMode} setIsDark={setIsDarkMode} onLogin={(username: string) => {
+    return <LoginScreen theme={theme} isDark={isDarkMode} setIsDark={setIsDark} onLogin={(username: string) => {
       localStorage.setItem('shweni_tawana_user', username);
       setCurrentUser(username);
     }} />;
@@ -193,12 +193,17 @@ export default function App() {
   return (
     <div id="app-wrapper" className={`flex h-screen transition-colors duration-300 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'} text-right`} dir="rtl">
       
-      {/* ڕێکخستنی سەد درەدی پەڕەی A4 و پرینت */}
+      {/* ستايلی تەواوی پرینت - چارەسەری ئوتۆماتیکی بۆ چاپکردن */}
       <style>{`
         @media print {
-          @page { size: A4 portrait; margin: 0; }
-          html, body, #root, #app-wrapper, #content-wrapper, #main-content {
-            display: block !important;
+          @page {
+            size: A4 portrait;
+            margin: 5mm;
+          }
+          
+          body, html, #root, #app-wrapper, #content-wrapper, #main-content {
+            background: white !important;
+            color: black !important;
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
@@ -207,34 +212,43 @@ export default function App() {
             width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
-            background: white !important;
+            display: block !important;
           }
-          * { overflow: visible !important; }
-          .print-hide { display: none !important; }
-          ::-webkit-scrollbar { display: none; }
-          input, select, textarea {
-            border: none !important;
-            background: transparent !important;
-            box-shadow: none !important;
-            outline: none !important;
-            appearance: none !important;
-            -webkit-appearance: none !important;
-            color: black !important;
+
+          .print-hide, aside, header, button, select {
+            display: none !important;
           }
+
           .a4-page {
-            width: 210mm !important;
-            height: 297mm !important;
+            width: 100% !important;
+            max-width: 210mm !important;
+            min-height: 285mm !important;
             margin: 0 auto !important;
-            padding: 10mm 15mm !important;
+            padding: 5mm 8mm !important;
             box-sizing: border-box !important;
             background: white !important;
             color: black !important;
             page-break-after: always;
             break-after: page;
+            box-shadow: none !important;
+            border: none !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
           }
+
           .a4-page:last-child {
-            page-break-after: auto;
-            break-after: auto;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+
+          input, textarea {
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            outline: none !important;
+            appearance: none !important;
+            color: black !important;
           }
         }
       `}</style>
