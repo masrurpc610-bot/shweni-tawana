@@ -193,7 +193,7 @@ export default function App() {
   return (
     <div id="app-wrapper" className={`flex h-screen transition-colors duration-300 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'} text-right`} dir="rtl">
       
-      {/* ١٠٠٪ چارەسەری کێشەی بڕان و دەرنەکەوتنی پرینتەکان */}
+      {/* ڕێکخستنی سەد درەدی پەڕەی A4 و پرینت */}
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 0; }
@@ -223,7 +223,7 @@ export default function App() {
           }
           .a4-page {
             width: 210mm !important;
-            height: 296mm !important;
+            height: 297mm !important;
             margin: 0 auto !important;
             padding: 10mm 15mm !important;
             box-sizing: border-box !important;
@@ -494,7 +494,6 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
         </div>
       )}
 
-      {/* مۆداڵی وەسڵە نەقدییەکان - لە کاتی پرینت ئەمە نابێتە مۆداڵ، بەڵکو دەبێتە پەڕەیەکی ئاسایی */}
       {showReceiptModal && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print:static print:p-0 print:bg-transparent">
           <div className={`w-[90%] max-w-5xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl print:w-full print:max-w-none print:max-h-none print:overflow-visible print:p-0 print:shadow-none print:rounded-none print:bg-transparent ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
@@ -956,7 +955,6 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                 <div key={pIndex} className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8">
                   <div>
                     <div className="text-center mb-6 border-b-2 border-black pb-4">
-                      {/* ناوی وەسڵ بوو بە توانا */}
                       <h1 className={`text-3xl font-black ${theme.text} mb-2`}>توانا</h1>
                       <p className="font-bold text-sm mb-1">بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
                       <p className="font-medium text-xs mb-1">ناونیشان: کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
