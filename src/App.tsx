@@ -3,13 +3,13 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import {
   LayoutDashboard, Users, ReceiptText, Building2,
-  Moon, Sun, Search, Trash2, Edit, BookOpen, Plus, X, Printer, FileText, ArrowRight, MinusCircle, LogOut, Lock, User
+  Moon, Sun, Search, Trash2, Edit, BookOpen, Plus, X, Printer, FileText, ArrowRight, MinusCircle, LogOut, Lock, User, Hash
 } from 'lucide-react';
 
 type ReceiptItem = { id: number; name: string; quantity: number | string; unit: string; price: number | string; isNew: boolean; type?: 'item' | 'payment'; note?: string; dateStr?: string; timeStr?: string };
-type CustomerReceipt = { id: number; date: string; items: ReceiptItem[] };
+type CustomerReceipt = { id: number; date: string; items: ReceiptItem[]; serialNumber?: number };
 type Customer = { id: number; name: string; phone: string; address: string; notes: string; balance: number; date: string; debtReceipts: CustomerReceipt[], user_id?: string };
-type SavedReceipt = { id: number; customerName: string; phone: string; date: string; totalAmount: number; type: 'cash'; items: ReceiptItem[], user_id?: string };
+type SavedReceipt = { id: number; serialNumber?: number; customerName: string; phone: string; date: string; totalAmount: number; type: 'cash'; items: ReceiptItem[], user_id?: string };
 
 const convertToEnglishDigits = (val: any): string => {
   if (val === null || val === undefined) return '';
@@ -27,6 +27,17 @@ const parseNumber = (val: any): number => {
   const converted = convertToEnglishDigits(val);
   const num = parseFloat(converted);
   return isNaN(num) ? 0 : num;
+};
+
+const fmtNum = (val: any): string => {
+  const n = parseNumber(val);
+  return n.toLocaleString('en-US');
+};
+
+const amountColorClass = (n: number): string => {
+  if (n > 0) return 'text-red-600';
+  if (n < 0) return 'text-green-600';
+  return 'text-black';
 };
 
 const THEMES: Record<string, any> = {
@@ -53,6 +64,8 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [savedReceipts, setSavedReceipts] = useState<SavedReceipt[]>([]);
   const [currentDraftId, setCurrentDraftId] = useState<number>(() => Date.now());
+  const [currentDraftSerial, setCurrentDraftSerial] = useState<number>(1);
+  const [currentDebtSerial, setCurrentDebtSerial] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(false);
 
   const fetchDataFromSupabase = async () => {
@@ -69,17 +82,28 @@ export default function App() {
           notes: c.notes || '', balance: Number(c.balance) || 0, date: c.date || new Date().toISOString(),
           debtReceipts: c.debt_receipts || []
         })));
+
+        let maxDebtSerial = 0;
+        customerData.forEach((c: any) => {
+          const receipts = c.debt_receipts || [];
+          receipts.forEach((r: any) => {
+            if (r.serialNumber && r.serialNumber > maxDebtSerial) maxDebtSerial = r.serialNumber;
+          });
+        });
+        setCurrentDebtSerial(maxDebtSerial + 1);
       }
 
-      const { data: cashData, error: cashError } = await supabase.from('cash_receipts').select('*');
+      const { data: cashData, error: cashError } = await supabase.from('cash_receipts').select('*').order('serial_number', { ascending: false });
       if (cashError) {
         console.error('Error fetching cash receipts:', cashError.message);
       } else if (cashData) {
         setSavedReceipts(cashData.map((r: any) => ({
-          id: r.id, customerName: r.customer_name || '', phone: r.phone || '',
+          id: r.id, serialNumber: r.serial_number || 0, customerName: r.customer_name || '', phone: r.phone || '',
           date: r.date || new Date().toISOString(), totalAmount: Number(r.total_amount) || 0,
           type: 'cash', items: r.items || []
         })));
+        const maxSerial = cashData.reduce((max: number, r: any) => Math.max(max, r.serial_number || 0), 0);
+        setCurrentDraftSerial(maxSerial + 1);
       }
     } catch (err) {
       console.error('Database fetch error:', err);
@@ -105,7 +129,7 @@ export default function App() {
   }
 
   const handleAutoSaveCash = async (receiptData: Omit<SavedReceipt, 'id'>) => {
-    const receiptToSave = { id: currentDraftId, ...receiptData };
+    const receiptToSave = { id: currentDraftId, serialNumber: currentDraftSerial, ...receiptData };
     setSavedReceipts(prev => {
       const exists = prev.find(r => r.id === currentDraftId);
       if (exists) return prev.map(r => r.id === currentDraftId ? receiptToSave : r);
@@ -113,25 +137,35 @@ export default function App() {
     });
 
     const { error } = await supabase.from('cash_receipts').upsert({
-      id: currentDraftId, customer_name: receiptData.customerName, phone: receiptData.phone,
+      id: currentDraftId, serial_number: currentDraftSerial, customer_name: receiptData.customerName, phone: receiptData.phone,
       date: receiptData.date, total_amount: receiptData.totalAmount, items: receiptData.items
     });
     if (error) console.error('Error saving cash receipt:', error.message);
   };
 
-  const startNewCashReceipt = () => setCurrentDraftId(Date.now());
+  const startNewCashReceipt = () => {
+    setCurrentDraftId(Date.now());
+    setCurrentDraftSerial(prev => prev + 1);
+  };
 
   const handleAddCustomer = async (newCustomer: Customer) => {
-    setCustomers(prev => [...prev, newCustomer]);
+    const serialToUse = currentDebtSerial;
+    const updatedReceipts = newCustomer.debtReceipts.map((r, i) => ({
+      ...r,
+      serialNumber: serialToUse + i
+    }));
+    const updatedCustomer = { ...newCustomer, debtReceipts: updatedReceipts };
+    setCustomers(prev => [...prev, updatedCustomer]);
+    setCurrentDebtSerial(prev => prev + updatedReceipts.length);
     const { error } = await supabase.from('customers').insert({
-      id: newCustomer.id,
-      name: newCustomer.name,
-      phone: newCustomer.phone,
-      address: newCustomer.address,
-      notes: newCustomer.notes,
-      balance: newCustomer.balance,
-      date: newCustomer.date,
-      debt_receipts: newCustomer.debtReceipts
+      id: updatedCustomer.id,
+      name: updatedCustomer.name,
+      phone: updatedCustomer.phone,
+      address: updatedCustomer.address,
+      notes: updatedCustomer.notes,
+      balance: updatedCustomer.balance,
+      date: updatedCustomer.date,
+      debt_receipts: updatedCustomer.debtReceipts
     });
     if (error) console.error('Error adding customer:', error.message);
   };
@@ -181,14 +215,24 @@ export default function App() {
       });
     });
 
-    setCustomers(prev => prev.map(c => {
-      if (c.id === customerId) {
-        const updated = { ...c, debtReceipts: newReceipts, balance: total };
-        if (activeCustomer?.id === customerId) setActiveCustomer(updated);
-        return updated;
+    setCustomers(prev => {
+      const updated = prev.map(c => {
+        if (c.id === customerId) {
+          return { ...c, debtReceipts: newReceipts, balance: total };
+        }
+        return c;
+      });
+
+      const maxSerial = updated.flatMap(c => c.debtReceipts || []).reduce((max, r) => Math.max(max, r.serialNumber || 0), 0);
+      setCurrentDebtSerial(maxSerial + 1);
+
+      if (activeCustomer?.id === customerId) {
+        const updatedCustomer = updated.find(c => c.id === customerId);
+        if (updatedCustomer) setActiveCustomer(updatedCustomer);
       }
-      return c;
-    }));
+
+      return updated;
+    });
 
     const { error } = await supabase.from('customers').update({
       balance: total, debt_receipts: newReceipts
@@ -216,6 +260,7 @@ export default function App() {
           <SidebarItem icon={<LayoutDashboard size={20} />} label="داشبۆرد" isActive={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isDark={isDarkMode} theme={theme} />
           <SidebarItem icon={<Users size={20} />} label="کڕیارەکان" isActive={activeTab === 'customers' || activeTab === 'customer-ledger'} onClick={() => setActiveTab('customers')} isDark={isDarkMode} theme={theme} />
           <SidebarItem icon={<ReceiptText size={20} />} label="وەسڵی نەقدی" isActive={activeTab === 'cash-receipt'} onClick={() => setActiveTab('cash-receipt')} isDark={isDarkMode} theme={theme} />
+          <SidebarItem icon={<FileText size={20} />} label="ئەرشیفی وەسڵە قەرزی" isActive={activeTab === 'debt-archive'} onClick={() => setActiveTab('debt-archive')} isDark={isDarkMode} theme={theme} />
 
           <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
             <button type="button" onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-red-500 hover:bg-red-50 dark:hover:bg-gray-700 transition-colors">
@@ -252,10 +297,11 @@ export default function App() {
         </header>
 
         <main id="main-content" className={`flex-1 overflow-y-auto p-8 transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
-          {activeTab === 'dashboard' && <DashboardView isDark={isDarkMode} timeFilter={timeFilter} setTimeFilter={setTimeFilter} customers={customers} savedReceipts={savedReceipts} onDeleteReceipt={handleDeleteSavedReceipt} onEditReceipt={handleEditSavedReceipt} theme={theme} />}
+          {activeTab === 'dashboard' && <DashboardView isDark={isDarkMode} timeFilter={timeFilter} setTimeFilter={setTimeFilter} customers={customers} savedReceipts={savedReceipts} onDeleteReceipt={handleDeleteSavedReceipt} onEditReceipt={handleEditSavedReceipt} theme={theme} onViewDebtArchive={() => setActiveTab('debt-archive')} />}
           {activeTab === 'customers' && <CustomersView isDark={isDarkMode} customers={customers} theme={theme} onAdd={handleAddCustomer} onEdit={handleEditCustomer} onDelete={handleDeleteCustomer} onOpenLedger={(c: Customer) => { setActiveCustomer(c); setActiveTab('customer-ledger'); }} />}
-          {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} />}
-          {activeTab === 'cash-receipt' && <CashReceiptView isDark={isDarkMode} theme={theme} onAutoSave={handleAutoSaveCash} startNewReceipt={startNewCashReceipt} draftId={currentDraftId} />}
+          {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} nextDebtSerial={currentDebtSerial} />}
+          {activeTab === 'debt-archive' && <DebtReceiptsArchiveView isDark={isDarkMode} customers={customers} theme={theme} />}
+          {activeTab === 'cash-receipt' && <CashReceiptView isDark={isDarkMode} theme={theme} onAutoSave={handleAutoSaveCash} startNewReceipt={startNewCashReceipt} draftId={currentDraftId} draftSerial={currentDraftSerial} />}
         </main>
       </div>
     </div>
@@ -308,15 +354,7 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
             <label className="block mb-2 text-sm font-bold">ناوی بەکارهێنەر</label>
             <div className={`flex items-center p-3 rounded-xl border transition-colors ${isDark ? 'bg-gray-700 border-gray-600 focus-within:border-blue-500' : 'bg-gray-50 border-gray-300 focus-within:border-blue-500'}`}>
               <User size={20} className="text-gray-400 ml-3" />
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-transparent outline-none font-medium text-left"
-                placeholder=""
-                dir="ltr"
-                required
-              />
+              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full bg-transparent outline-none font-medium text-left" dir="ltr" required />
             </div>
           </div>
 
@@ -324,34 +362,55 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
             <label className="block mb-2 text-sm font-bold">تێپەڕوشە (پاسۆرد)</label>
             <div className={`flex items-center p-3 rounded-xl border transition-colors ${isDark ? 'bg-gray-700 border-gray-600 focus-within:border-blue-500' : 'bg-gray-50 border-gray-300 focus-within:border-blue-500'}`}>
               <Lock size={20} className="text-gray-400 ml-3" />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-transparent outline-none font-medium text-left tracking-widest"
-                placeholder=""
-                dir="ltr"
-                required
-              />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-transparent outline-none font-medium text-left tracking-widest" dir="ltr" required />
             </div>
           </div>
 
-          <button
-            type="submit"
-            className={`w-full py-4 rounded-xl font-bold text-white transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 ${theme.main} ${theme.hover}`}
-          >
+          <button type="submit" className={`w-full py-4 rounded-xl font-bold text-white transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 ${theme.main} ${theme.hover}`}>
             چوونە ژوورەوە
           </button>
         </form>
-        <div className="text-center mt-6 text-xs font-bold text-gray-400" dir="ltr">
-          Designed and Developed by Eng. Masrour
-        </div>
+        <div className="text-center mt-6 text-xs font-bold text-gray-400" dir="ltr">Designed and Developed by Eng. Masrour</div>
       </div>
     </div>
   );
 }
 
-function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedReceipts, onDeleteReceipt, onEditReceipt, theme }: any) {
+function ReceiptBrandingHeader({ theme }: { theme: any }) {
+  return (
+    <div className="text-center mb-5 border-b-[3px] border-black pb-4">
+      <h1 className="receipt-header-brand text-4xl font-black mb-2" style={{ color: '#111' }}>توانا</h1>
+      <p className="font-bold text-sm mb-1">بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
+      <p className="font-medium text-xs mb-1">ناونیشان: کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
+      <p className="font-bold text-base mt-2" dir="ltr">0750 497 8758 - 0750 017 2002</p>
+    </div>
+  );
+}
+
+function ReceiptSummaryBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="receipt-summary-box border-[3px] border-black p-4 bg-gray-50">
+      {children}
+    </div>
+  );
+}
+
+function SignatureSection() {
+  return (
+    <div className="flex gap-20 text-base font-bold">
+      <div className="text-center">
+        <p>ئیمزای کڕیار</p>
+        <div className="mt-10 border-b-2 border-dotted border-black w-40 mx-auto"></div>
+      </div>
+      <div className="text-center">
+        <p>مۆر و ئیمزای فرۆشیار</p>
+        <div className="mt-10 border-b-2 border-dotted border-black w-40 mx-auto"></div>
+      </div>
+    </div>
+  );
+}
+
+function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedReceipts, onDeleteReceipt, onEditReceipt, theme, onViewDebtArchive }: any) {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<SavedReceipt | null>(null);
@@ -371,19 +430,23 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
   const filteredCustomers = customers.filter((c: any) => filterByTime(c.date));
   const filteredReceipts = savedReceipts.filter((r: any) => filterByTime(r.date));
 
+  const filteredDebtReceipts: any[] = [];
+  customers.forEach((c: Customer) => {
+    c.debtReceipts.forEach(r => {
+      if (r.items && r.items.length > 0 && r.items.some(i => i.name || i.price || i.quantity) && filterByTime(r.date)) {
+        filteredDebtReceipts.push(r);
+      }
+    });
+  });
+
   const allPayments: any[] = [];
   customers.forEach((c: Customer) => {
     c.debtReceipts.forEach(r => {
       r.items.forEach(i => {
         if (i.type === 'payment' && filterByTime(r.date)) {
           allPayments.push({
-            customerName: c.name,
-            phone: c.phone,
-            amount: parseNumber(i.price),
-            receiver: i.note,
-            date: r.date,
-            dateStr: i.dateStr,
-            timeStr: i.timeStr
+            customerName: c.name, phone: c.phone, amount: parseNumber(i.price),
+            receiver: i.note, date: r.date, dateStr: i.dateStr, timeStr: i.timeStr
           });
         }
       });
@@ -392,10 +455,14 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
 
   const totalPaymentsCollected = allPayments.reduce((sum, p) => sum + p.amount, 0);
 
-  const searchedReceipts = filteredReceipts.filter((r: any) =>
-    (r.customerName && r.customerName.includes(receiptSearch)) ||
-    (r.phone && r.phone.includes(receiptSearch))
-  );
+  const searchedReceipts = filteredReceipts.filter((r: any) => {
+    const q = receiptSearch.trim();
+    if (!q) return true;
+    const serialStr = r.serialNumber ? String(r.serialNumber) : '';
+    return (r.customerName && r.customerName.includes(q)) ||
+           (r.phone && r.phone.includes(q)) ||
+           (serialStr && serialStr.includes(q));
+  });
 
   const totalDebt = filteredCustomers.reduce((sum: number, c: any) => sum + c.balance, 0);
   const totalCashSales = filteredReceipts.reduce((sum: number, r: any) => sum + r.totalAmount, 0);
@@ -410,12 +477,12 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 print-hide">
-        <DashboardCard title="کۆی قەرزەکانمان" amount={totalDebt.toLocaleString()} suffix="د.ع" icon={ReceiptText} isDark={isDark} />
+        <DashboardCard title="کۆی قەرزەکانمان" amount={fmtNum(totalDebt)} suffix="د.ع" icon={ReceiptText} isDark={isDark} />
 
         <div onClick={() => setShowPaymentsModal(true)} className={`cursor-pointer hover:scale-105 transform transition-all duration-200 p-6 rounded-xl border flex flex-col items-center justify-center gap-4 ${isDark ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
           <div className={isDark ? 'bg-gray-700 p-3 rounded-2xl' : 'bg-gray-50 p-3 rounded-2xl'}><BookOpen className="text-blue-500" size={24} /></div>
           <div className="text-center">
-            <div className="text-2xl font-black flex items-center justify-center gap-1"><span>{totalPaymentsCollected.toLocaleString()}</span><span className="text-sm font-bold text-gray-400">د.ع</span></div>
+            <div className="text-2xl font-black flex items-center justify-center gap-1"><span>{fmtNum(totalPaymentsCollected)}</span><span className="text-sm font-bold text-gray-400">د.ع</span></div>
             <div className={`text-sm mt-1 font-bold flex items-center justify-center gap-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>قەرزی وەرگیراوە (واصڵ) <FileText size={14} /></div>
           </div>
         </div>
@@ -423,12 +490,20 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
         <div onClick={() => setShowReceiptModal(true)} className={`cursor-pointer hover:scale-105 transform transition-all duration-200 p-6 rounded-xl border flex flex-col items-center justify-center gap-4 ${isDark ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
           <div className={isDark ? 'bg-gray-700 p-3 rounded-2xl' : 'bg-gray-50 p-3 rounded-2xl'}><Building2 className={theme.text} size={24} /></div>
           <div className="text-center">
-            <div className="text-2xl font-black flex items-center justify-center gap-1"><span>{totalCashSales.toLocaleString()}</span><span className="text-sm font-bold text-gray-400">د.ع</span></div>
+            <div className="text-2xl font-black flex items-center justify-center gap-1"><span>{fmtNum(totalCashSales)}</span><span className="text-sm font-bold text-gray-400">د.ع</span></div>
             <div className={`text-sm mt-1 font-bold flex items-center justify-center gap-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>فرۆشتنی نەقدی <FileText size={14} /></div>
           </div>
         </div>
 
         <DashboardCard title="کۆی کڕیارەکان" amount={filteredCustomers.length} suffix="کەس" icon={Users} isDark={isDark} />
+
+        <div onClick={onViewDebtArchive} className={`cursor-pointer hover:scale-105 transform transition-all duration-200 p-6 rounded-xl border flex flex-col items-center justify-center gap-4 ${isDark ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
+          <div className={isDark ? 'bg-gray-700 p-3 rounded-2xl' : 'bg-gray-50 p-3 rounded-2xl'}><FileText className="text-red-500" size={24} /></div>
+          <div className="text-center">
+            <div className="text-2xl font-black">{filteredDebtReceipts.length}</div>
+            <div className={`text-sm mt-1 font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>وەسڵە قەرزییەکان</div>
+          </div>
+        </div>
       </div>
 
       {showPaymentsModal && (
@@ -438,17 +513,16 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
               <h2 className="text-2xl font-bold">لێستی قەرزی وەرگیراوەکان (واصڵ)</h2>
               <button type="button" onClick={() => setShowPaymentsModal(false)} className="text-red-500 hover:text-red-700 bg-red-100 p-2 rounded-lg"><X size={24} /></button>
             </div>
-
             <div className="space-y-3">
               {allPayments.map((p, idx) => (
                 <div key={idx} className={`p-4 rounded-xl border flex justify-between items-center ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
                   <div>
-                    <p className="font-bold text-lg text-emerald-600">{p.customerName}</p>
+                    <p className="font-bold text-lg text-green-600">{p.customerName}</p>
                     <p className="text-sm text-gray-500">وەرگر: <span className="font-bold text-blue-700">{p.receiver}</span> - مۆبایل: <span dir="ltr">{p.phone}</span></p>
                     <p className="text-xs text-gray-400 mt-1">{p.dateStr || new Date(p.date).toLocaleDateString('en-IQ')} ({p.timeStr || '---'})</p>
                   </div>
                   <div className="text-left">
-                    <p className="font-black text-2xl text-emerald-600" dir="ltr">- {p.amount.toLocaleString()} د.ع</p>
+                    <p className="font-black text-2xl text-green-600" dir="ltr">- {fmtNum(p.amount)} د.ع</p>
                   </div>
                 </div>
               ))}
@@ -469,18 +543,22 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
               <div className="print-hide">
                 <div className={`mb-6 flex items-center gap-3 px-4 py-3 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300 shadow-sm'}`}>
                   <Search className="text-gray-400" size={20} />
-                  <input type="text" placeholder="گەڕان بەپێی ناوی کڕیار یان مۆبایل..." className={`w-full bg-transparent outline-none font-medium ${isDark ? 'text-white' : 'text-black'}`} value={receiptSearch} onChange={(e) => setReceiptSearch(e.target.value)} />
+                  <input type="text" placeholder="گەڕان بەپێی ژمارەی وەسڵ، ناوی کڕیار، یان مۆبایل..." className={`w-full bg-transparent outline-none font-medium ${isDark ? 'text-white' : 'text-black'}`} value={receiptSearch} onChange={(e) => setReceiptSearch(e.target.value)} />
+                  <Hash size={18} className="text-gray-400" />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {searchedReceipts.map((receipt: SavedReceipt) => (
                     <div key={receipt.id} className={`p-4 rounded-xl border flex justify-between items-center transition-all ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
                       <div className="cursor-pointer flex-1" onClick={() => setSelectedReceipt(receipt)}>
-                        <p className="font-bold text-lg">{receipt.customerName || 'کڕیاری نەناسراو'}</p>
+                        <div className="flex items-center gap-2 mb-1">
+                          {receipt.serialNumber && <span className="text-xs font-black bg-gray-200 text-gray-700 px-2 py-0.5 rounded">#{receipt.serialNumber}</span>}
+                          <p className="font-bold text-lg">{receipt.customerName || 'کڕیاری نەناسراو'}</p>
+                        </div>
                         <p className="text-sm text-gray-500">{new Date(receipt.date).toLocaleDateString('en-IQ')} - <span dir="ltr">{receipt.phone}</span></p>
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-left cursor-pointer" onClick={() => setSelectedReceipt(receipt)}>
-                          <p className={`font-black text-xl ${theme.text}`}>{receipt.totalAmount.toLocaleString()} د.ع</p>
+                          <p className={`font-black text-xl ${theme.text}`}>{fmtNum(receipt.totalAmount)} د.ع</p>
                         </div>
                         <button type="button" onClick={() => setEditingReceipt(receipt)} className={`p-2 hover:${theme.text}`} title="دەستکاری کردن"><Edit size={20} /></button>
                         <button type="button" onClick={() => onDeleteReceipt(receipt.id)} className="text-red-500 hover:text-red-700 p-2" title="سڕینەوەی وەسڵ"><Trash2 size={20} /></button>
@@ -494,6 +572,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
               <div>
                 <div className="mb-4 flex gap-4 print-hide">
                   <button type="button" onClick={() => setSelectedReceipt(null)} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-bold">گەڕانەوە بۆ لیست</button>
+                  <button type="button" onClick={() => setEditingReceipt(selectedReceipt)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Edit size={18} /> دەستکاری</button>
                   <button type="button" onClick={() => window.print()} className={`${theme.main} ${theme.hover} text-white px-4 py-2 rounded-lg font-bold flex gap-2`}><Printer size={20} /> چاپکردن / PDF</button>
                 </div>
                 <StaticReceiptTemplate receipt={selectedReceipt} theme={theme} />
@@ -504,11 +583,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
       )}
 
       {editingReceipt && (
-        <EditReceiptModal
-          receipt={editingReceipt}
-          isDark={isDark}
-          theme={theme}
-          onClose={() => setEditingReceipt(null)}
+        <EditReceiptModal receipt={editingReceipt} isDark={isDark} theme={theme} onClose={() => setEditingReceipt(null)}
           onSave={(updated: SavedReceipt) => {
             onEditReceipt(updated);
             setEditingReceipt(null);
@@ -535,9 +610,7 @@ function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
 
   const updateItem = (id: number, field: string, value: any) => {
     let processedVal = value;
-    if (field === 'quantity' || field === 'price') {
-      processedVal = convertToEnglishDigits(value);
-    }
+    if (field === 'quantity' || field === 'price') processedVal = convertToEnglishDigits(value);
     setItems(items.map(i => i.id === id ? { ...i, [field]: processedVal } : i));
   };
 
@@ -547,26 +620,18 @@ function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
     setItems([...items, { id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }]);
   };
 
-  const removeItem = (id: number) => {
-    setItems(items.filter(i => i.id !== id));
-  };
+  const removeItem = (id: number) => setItems(items.filter(i => i.id !== id));
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
-      ...receipt,
-      customerName,
-      phone: convertToEnglishDigits(phone),
-      totalAmount: totalItemsCost,
-      items
-    });
+    onSave({ ...receipt, customerName, phone: convertToEnglishDigits(phone), totalAmount: totalItemsCost, items });
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 print-hide">
       <div className={`w-[90%] max-w-4xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl ${isDark ? 'bg-gray-900 text-white' : 'bg-white text-black'}`}>
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">دەستکاریکردنی وەسڵ</h2>
+          <h2 className="text-2xl font-bold">دەستکاریکردنی وەسڵ {receipt.serialNumber ? `(#${receipt.serialNumber})` : ''}</h2>
           <button type="button" onClick={onClose} className="text-red-500 hover:text-red-700 bg-red-100 p-2 rounded-lg"><X size={24} /></button>
         </div>
 
@@ -613,7 +678,7 @@ function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
                         </select>
                       </td>
                       <td className="border p-1"><input type="text" value={item.price} onChange={e => updateItem(item.id, 'price', e.target.value)} className="w-full p-1 bg-transparent outline-none font-bold text-center" /></td>
-                      <td className="border p-1 font-black" dir="ltr">{lineTotal.toLocaleString()}</td>
+                      <td className="border p-1 font-black" dir="ltr">{fmtNum(lineTotal)}</td>
                       <td className="border p-1"><button type="button" onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button></td>
                     </tr>
                   );
@@ -646,10 +711,7 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || formData.name.trim() === '') {
-      setErrorMsg('تکایە ناوی کڕیارەکە بنووسە!');
-      return;
-    }
+    if (!formData.name || formData.name.trim() === '') { setErrorMsg('تکایە ناوی کڕیارەکە بنووسە!'); return; }
 
     const cleanedPhone = convertToEnglishDigits(formData.phone);
     const dateStr = new Date().toLocaleDateString('en-GB');
@@ -659,13 +721,8 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
       onEdit({ ...editingCustomer, ...formData, phone: cleanedPhone });
     } else {
       onAdd({
-        id: Date.now(),
-        name: formData.name,
-        phone: cleanedPhone,
-        address: formData.address,
-        notes: formData.notes,
-        balance: 0,
-        date: new Date().toISOString(),
+        id: Date.now(), name: formData.name, phone: cleanedPhone, address: formData.address, notes: formData.notes,
+        balance: 0, date: new Date().toISOString(),
         debtReceipts: [{ id: Date.now(), date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] }]
       });
     }
@@ -694,7 +751,7 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
               <tr key={customer.id} className={`border-t transition-colors ${isDark ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-100 hover:bg-gray-50'}`}>
                 <td className={`p-4 font-bold cursor-pointer transition-colors hover:${theme.text}`} onClick={() => onOpenLedger(customer)}>{customer.name}</td>
                 <td className="p-4 cursor-pointer text-left" onClick={() => onOpenLedger(customer)}><span dir="ltr" style={{ unicodeBidi: 'plaintext' }}>{customer.phone || '---'}</span></td>
-                <td className="p-4 font-bold text-red-500 cursor-pointer" onClick={() => onOpenLedger(customer)}>{customer.balance.toLocaleString()} د.ع</td>
+                <td className={`p-4 font-bold cursor-pointer ${amountColorClass(customer.balance)}`} onClick={() => onOpenLedger(customer)}>{fmtNum(customer.balance)} د.ع</td>
                 <td className="p-4 flex gap-4 text-gray-400">
                   <button type="button" onClick={() => onOpenLedger(customer)} className="hover:text-blue-500 transition-colors" title="دەفتەری قەرز"><BookOpen size={20} /></button>
                   <button type="button" onClick={() => openEditModal(customer)} className={`hover:${theme.text} transition-colors`} title="دەستکاریکردن"><Edit size={20} /></button>
@@ -714,48 +771,23 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
               <h2 className="text-2xl font-bold">{editingCustomer ? 'دەستکاریکردنی کڕیار' : 'زیادکردنی کڕیار'}</h2>
             </div>
             {errorMsg && <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 font-bold">{errorMsg}</div>}
-
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block mb-2 font-bold text-sm">ناو *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className={`w-full p-3 rounded-lg border outline-none transition-colors ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-black'}`}
-                />
+                <input type="text" value={formData.name} onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))} className={`w-full p-3 rounded-lg border outline-none transition-colors ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-black'}`} />
               </div>
               <div>
                 <label className="block mb-2 font-bold text-sm">ژمارەی مۆبایل</label>
-                <input
-                  type="text"
-                  value={formData.phone}
-                  onChange={e => setFormData(prev => ({ ...prev, phone: convertToEnglishDigits(e.target.value) }))}
-                  className={`w-full p-3 text-right rounded-lg border outline-none transition-colors ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-black'}`}
-                  placeholder="0750 000 0000"
-                  dir="ltr"
-                  style={{ unicodeBidi: 'plaintext', textAlign: 'right' }}
-                />
+                <input type="text" value={formData.phone} onChange={e => setFormData(prev => ({ ...prev, phone: convertToEnglishDigits(e.target.value) }))} className={`w-full p-3 text-right rounded-lg border outline-none transition-colors ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-black'}`} placeholder="0750 000 0000" dir="ltr" style={{ unicodeBidi: 'plaintext', textAlign: 'right' }} />
               </div>
               <div>
                 <label className="block mb-2 font-bold text-sm">ناونیشان</label>
-                <input
-                  type="text"
-                  value={formData.address}
-                  onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                  className={`w-full p-3 rounded-lg border outline-none transition-colors ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-black'}`}
-                />
+                <input type="text" value={formData.address} onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))} className={`w-full p-3 rounded-lg border outline-none transition-colors ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-black'}`} />
               </div>
               <div>
                 <label className="block mb-2 font-bold text-sm">تێبینی</label>
-                <textarea
-                  value={formData.notes}
-                  onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className={`w-full p-3 rounded-lg border outline-none transition-colors ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-black'}`}
-                  rows={3}
-                ></textarea>
+                <textarea value={formData.notes} onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))} className={`w-full p-3 rounded-lg border outline-none transition-colors ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-black'}`} rows={3} />
               </div>
-
               <div className="flex gap-4 mt-8">
                 <button type="submit" className={`flex-1 ${theme.main} ${theme.hover} text-white font-bold py-3 rounded-lg transition-colors`}>پاشەکەوتکردن</button>
               </div>
@@ -767,7 +799,7 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
   );
 }
 
-function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
+function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack, nextDebtSerial }: any) {
   const [receipts, setReceipts] = useState<CustomerReceipt[]>(() => {
     if (customer.debtReceipts?.length > 0) {
       return customer.debtReceipts.map((r: CustomerReceipt) => {
@@ -785,14 +817,12 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
     }
   });
 
-  useEffect(() => {
-    onUpdateDebt(customer.id, receipts);
-  }, [receipts]);
+  useEffect(() => { onUpdateDebt(customer.id, receipts); }, [receipts]);
 
   const addNewReceiptBlock = () => {
     const dateStr = new Date().toLocaleDateString('en-GB');
     const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    setReceipts([...receipts, { id: Date.now(), date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] }]);
+    setReceipts([...receipts, { id: Date.now(), serialNumber: nextDebtSerial, date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] }]);
   };
 
   const deleteReceiptBlock = (id: number) => {
@@ -807,9 +837,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
     }
   };
 
-  const updateReceiptDate = (id: number, newDate: string) => {
-    setReceipts(receipts.map(r => r.id === id ? { ...r, date: newDate } : r));
-  };
+  const updateReceiptDate = (id: number, newDate: string) => setReceipts(receipts.map(r => r.id === id ? { ...r, date: newDate } : r));
 
   const addItem = (receiptId: number) => {
     const dateStr = new Date().toLocaleDateString('en-GB');
@@ -825,16 +853,9 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
 
   const updateItem = (receiptId: number, itemId: number, field: string, value: any) => {
     let processedVal = value;
-    if (field === 'quantity' || field === 'price') {
-      processedVal = convertToEnglishDigits(value);
-    }
+    if (field === 'quantity' || field === 'price') processedVal = convertToEnglishDigits(value);
     setReceipts(receipts.map(r => {
-      if (r.id === receiptId) {
-        return {
-          ...r,
-          items: r.items.map(i => i.id === itemId ? { ...i, [field]: processedVal } : i)
-        };
-      }
+      if (r.id === receiptId) return { ...r, items: r.items.map(i => i.id === itemId ? { ...i, [field]: processedVal } : i) };
       return r;
     }));
   };
@@ -871,18 +892,14 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
 
       {receipts.map((receipt) => {
         const prevDebt = runningTotalDebt;
-
         let totalItemsCost = 0;
         let totalPaymentsMade = 0;
 
         receipt.items.forEach(item => {
           const price = parseNumber(item.price);
           const qty = parseNumber(item.quantity);
-          if (item.type === 'payment') {
-            totalPaymentsMade += price;
-          } else {
-            totalItemsCost += qty * price;
-          }
+          if (item.type === 'payment') totalPaymentsMade += price;
+          else totalItemsCost += qty * price;
         });
 
         const currentReceiptTotal = totalItemsCost - totalPaymentsMade;
@@ -891,7 +908,6 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
 
         const ITEMS_PER_PAGE = 15;
         const totalPages = Math.ceil(receipt.items.length / ITEMS_PER_PAGE) || 1;
-
         const pagesArray = [];
         for (let p = 0; p < totalPages; p++) {
           const startIdx = p * ITEMS_PER_PAGE;
@@ -900,9 +916,9 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
 
         return (
           <div key={receipt.id} className="mb-12">
-
             <div className="max-w-[210mm] mx-auto flex justify-between items-center bg-gray-300 dark:bg-gray-700 p-3 rounded-t-lg border border-b-0 border-gray-400 print-hide">
               <div className="flex items-center gap-3">
+                {receipt.serialNumber && <span className="text-sm font-black bg-gray-200 text-gray-700 px-2 py-1 rounded">#{receipt.serialNumber}</span>}
                 <span className="font-bold dark:text-white">بەرواری وەسڵ:</span>
                 <input type="date" value={receipt.date ? receipt.date.split('T')[0] : ''} onChange={(e) => updateReceiptDate(receipt.id, new Date(e.target.value).toISOString())} className="p-1 rounded font-bold outline-none text-black" />
               </div>
@@ -914,24 +930,19 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
 
             {pagesArray.map((pageObj, pIndex) => {
               const isLastPage = pIndex === totalPages - 1;
-
               return (
                 <div key={pIndex} className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8">
                   <div>
-                    <div className="text-center mb-6 border-b-2 border-black pb-4">
-                      <h1 className={`text-3xl font-black ${theme.text} mb-2`}>توانا</h1>
-                      <p className="font-bold text-sm mb-1">بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
-                      <p className="font-medium text-xs mb-1">ناونیشان: کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
-                      <p className="font-bold text-sm mt-2" dir="ltr">0750 497 8758 - 0750 017 2002</p>
-                    </div>
+                    <ReceiptBrandingHeader theme={theme} />
 
-                    <div className="flex justify-between mb-6 font-bold text-base px-2">
+                    <div className="flex justify-between mb-5 font-bold text-base px-2">
                       <div className="flex flex-col gap-2 w-1/2">
                         <p>ناوی کڕیار: <span className="mr-2 text-lg font-black border-b-2 border-black pb-0.5 px-3">{customer.name}</span></p>
                         <p>مۆبایل: <span className="mr-2 text-lg font-black border-b-2 border-black pb-0.5 px-3"><span dir="ltr" style={{ unicodeBidi: 'plaintext' }}>{customer.phone || '---'}</span></span></p>
                       </div>
                       <div className="text-left flex flex-col gap-1">
                         <p>بەروار: {receipt.date ? new Date(receipt.date).toLocaleDateString('en-IQ') : ''}</p>
+                        {receipt.serialNumber && <p>ژمارەی وەسڵ: <span className="font-black">#{receipt.serialNumber}</span></p>}
                         <p>جۆری وەسڵ: <span className="text-red-700">قەرز (پەڕەی {pageObj.pageNum} لە {totalPages})</span></p>
                       </div>
                     </div>
@@ -956,63 +967,19 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                           const priceNum = parseNumber(item.price);
                           const qtyNum = parseNumber(item.quantity);
                           const lineTotal = item.type === 'payment' ? -priceNum : qtyNum * priceNum;
-
                           return (
                             <tr key={item.id} className={`${item.type === 'payment' ? 'bg-green-50' : 'bg-white'} text-xs`}>
                               <td className="border-2 border-black p-0.5 font-bold">{globalIdx + 1}</td>
-
                               <td className="border-2 border-black p-0.5">
-                                <input
-                                  type="text"
-                                  value={item.name}
-                                  onChange={(e) => updateItem(receipt.id, item.id, 'name', e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      const nextInput = document.getElementById(`qty-${receipt.id}-${item.id}`);
-                                      if (nextInput) nextInput.focus();
-                                    }
-                                  }}
-                                  className={`w-full text-right p-1 bg-transparent outline-none font-bold text-xs ${item.type === 'payment' ? 'text-green-700' : ''}`}
-                                  placeholder="ناو..."
-                                />
+                                <input type="text" value={item.name} onChange={(e) => updateItem(receipt.id, item.id, 'name', e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const ni = document.getElementById(`qty-${receipt.id}-${item.id}`); if (ni) ni.focus(); } }}
+                                  className={`w-full text-right p-1 bg-transparent outline-none font-bold text-xs ${item.type === 'payment' ? 'text-green-700' : ''}`} placeholder="ناو..." />
                               </td>
-
                               <td className="border-2 border-black p-0.5">
-                                {item.type === 'payment' ? (
-                                  <input
-                                    id={`qty-${receipt.id}-${item.id}`}
-                                    type="text"
-                                    value={item.quantity}
-                                    onChange={(e) => updateItem(receipt.id, item.id, 'quantity', e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        const nextInput = document.getElementById(`price-${receipt.id}-${item.id}`);
-                                        if (nextInput) nextInput.focus();
-                                      }
-                                    }}
-                                    className="w-full text-center p-1 bg-transparent outline-none font-bold text-xs"
-                                    placeholder="بڕی پارە"
-                                  />
-                                ) : (
-                                  <input
-                                    id={`qty-${receipt.id}-${item.id}`}
-                                    type="text"
-                                    value={item.quantity}
-                                    onChange={(e) => updateItem(receipt.id, item.id, 'quantity', e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        const nextInput = document.getElementById(`price-${receipt.id}-${item.id}`);
-                                        if (nextInput) nextInput.focus();
-                                      }
-                                    }}
-                                    className="w-full text-center p-1 bg-transparent outline-none font-bold text-xs"
-                                  />
-                                )}
+                                <input id={`qty-${receipt.id}-${item.id}`} type="text" value={item.quantity} onChange={(e) => updateItem(receipt.id, item.id, 'quantity', e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const ni = document.getElementById(`price-${receipt.id}-${item.id}`); if (ni) ni.focus(); } }}
+                                  className="w-full text-center p-1 bg-transparent outline-none font-bold text-xs" placeholder={item.type === 'payment' ? 'بڕی پارە' : ''} />
                               </td>
-
                               <td className="border-2 border-black p-0.5">
                                 {item.type === 'payment' ? <span className="text-gray-400 font-bold">-</span> : (
                                   <select value={item.unit} onChange={(e) => updateItem(receipt.id, item.id, 'unit', e.target.value)} className="w-full text-center bg-transparent outline-none font-bold text-[10px] print:appearance-none">
@@ -1020,70 +987,31 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                                   </select>
                                 )}
                               </td>
-
                               <td className="border-2 border-black p-0.5">
-                                <input
-                                  id={`price-${receipt.id}-${item.id}`}
-                                  type="text"
-                                  value={item.price}
-                                  onChange={(e) => updateItem(receipt.id, item.id, 'price', e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      const nextInput = document.getElementById(`note-${receipt.id}-${item.id}`);
-                                      if (nextInput) nextInput.focus();
-                                    }
-                                  }}
-                                  className="w-full text-center p-1 bg-transparent outline-none font-bold text-xs"
-                                  placeholder={item.type === 'payment' ? 'بڕی پارە' : ''}
-                                />
+                                <input id={`price-${receipt.id}-${item.id}`} type="text" value={item.price} onChange={(e) => updateItem(receipt.id, item.id, 'price', e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const ni = document.getElementById(`note-${receipt.id}-${item.id}`); if (ni) ni.focus(); } }}
+                                  className="w-full text-center p-1 bg-transparent outline-none font-bold text-xs" placeholder={item.type === 'payment' ? 'بڕی پارە' : ''} />
                               </td>
-
                               <td className={`border-2 border-black p-0.5 font-black text-xs ${item.type === 'payment' ? 'text-green-600' : 'text-red-600'}`} dir="ltr">
-                                {item.type === 'payment' ? `- ${Math.abs(lineTotal).toLocaleString()}` : lineTotal.toLocaleString()}
+                                {item.type === 'payment' ? `- ${fmtNum(Math.abs(lineTotal))}` : fmtNum(lineTotal)}
                               </td>
-
                               <td className="border-2 border-black p-0.5 text-[9px] font-bold text-gray-700 leading-tight">
                                 <div dir="ltr">{item.dateStr || '26/07/2026'}</div>
                                 <div dir="ltr" className="text-gray-500">{item.timeStr || '12:30'}</div>
                               </td>
-
                               <td className="border-2 border-black p-0.5">
                                 {item.type === 'payment' ? (
-                                  <select
-                                    id={`note-${receipt.id}-${item.id}`}
-                                    value={item.note || 'زیاد کریم'}
-                                    onChange={(e) => updateItem(receipt.id, item.id, 'note', e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        addItem(receipt.id);
-                                      }
-                                    }}
-                                    className="w-full text-center bg-transparent outline-none font-bold text-[10px] text-blue-700 print:appearance-none"
-                                  >
-                                    <option value="زیاد کریم">زیاد کریم</option>
-                                    <option value="زانا زیاد">زانا زیاد</option>
-                                    <option value="شاگرد">شاگرد</option>
+                                  <select id={`note-${receipt.id}-${item.id}`} value={item.note || 'زیاد کریم'} onChange={(e) => updateItem(receipt.id, item.id, 'note', e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(receipt.id); } }}
+                                    className="w-full text-center bg-transparent outline-none font-bold text-[10px] text-blue-700 print:appearance-none">
+                                    <option value="زیاد کریم">زیاد کریم</option><option value="زانا زیاد">زانا زیاد</option><option value="شاگرد">شاگرد</option>
                                   </select>
                                 ) : (
-                                  <input
-                                    id={`note-${receipt.id}-${item.id}`}
-                                    type="text"
-                                    value={item.note || ''}
-                                    onChange={(e) => updateItem(receipt.id, item.id, 'note', e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        addItem(receipt.id);
-                                      }
-                                    }}
-                                    className="w-full text-right p-1 bg-transparent outline-none font-normal text-[10px] text-black"
-                                    placeholder="تێبینی..."
-                                  />
+                                  <input id={`note-${receipt.id}-${item.id}`} type="text" value={item.note || ''} onChange={(e) => updateItem(receipt.id, item.id, 'note', e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(receipt.id); } }}
+                                    className="w-full text-right p-1 bg-transparent outline-none font-normal text-[10px] text-black" placeholder="تێبینی..." />
                                 )}
                               </td>
-
                               <td className="border-2 border-black p-0.5 print-hide">
                                 <button type="button" onClick={() => removeItem(receipt.id, item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
                               </td>
@@ -1095,32 +1023,27 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                   </div>
 
                   <div className="mt-auto">
-
                     <div className="flex justify-between items-end mt-4">
                       {isLastPage ? (
                         <>
-                          <div className="flex gap-16 text-base font-bold">
-                            <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-                            <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-                          </div>
-
-                          <div className="border-4 border-black p-4 w-72 text-center bg-gray-100">
+                          <SignatureSection />
+                          <ReceiptSummaryBox>
                             <div className="flex justify-between font-bold text-sm mb-1 text-gray-700">
                               <span>قەرزی پێشوو:</span>
-                              <span dir="ltr">{prevDebt.toLocaleString()}</span>
+                              <span dir="ltr" className={amountColorClass(prevDebt)}>{fmtNum(prevDebt)}</span>
                             </div>
                             <div className="flex justify-between font-bold text-sm mb-1 text-blue-800">
                               <span>کۆی کاڵاکان:</span>
-                              <span dir="ltr">{totalItemsCost.toLocaleString()}</span>
+                              <span dir="ltr">{fmtNum(totalItemsCost)}</span>
                             </div>
                             <div className="flex justify-between font-black text-sm mb-2 text-green-600">
                               <span>پارەی دراو (واصڵ):</span>
-                              <span dir="ltr">- {totalPaymentsMade.toLocaleString()}</span>
+                              <span dir="ltr">- {fmtNum(totalPaymentsMade)}</span>
                             </div>
                             <div className="border-t-2 border-gray-400 my-1"></div>
                             <p className="text-base font-bold">کۆی گشتی ماوە (قەرز)</p>
-                            <p className="text-2xl font-black mt-1 text-red-700">{currentRemaining.toLocaleString()} دینار</p>
-                          </div>
+                            <p className={`text-2xl font-black mt-1 ${amountColorClass(currentRemaining)}`} dir="ltr">{fmtNum(currentRemaining)} دینار</p>
+                          </ReceiptSummaryBox>
                         </>
                       ) : (
                         <div className="w-full flex justify-between items-center text-xs font-bold text-gray-500 mt-4">
@@ -1134,7 +1057,6 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                 </div>
               );
             })}
-
           </div>
         );
       })}
@@ -1142,7 +1064,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
   );
 }
 
-function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
+function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId, draftSerial }: any) {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [items, setItems] = useState<ReceiptItem[]>(() => [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr: new Date().toLocaleDateString('en-GB'), timeStr: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }]);
@@ -1152,9 +1074,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
   items.forEach(item => {
     const price = parseNumber(item.price);
     const qty = parseNumber(item.quantity);
-    if (item.type !== 'payment') {
-      totalItemsCost += qty * price;
-    }
+    if (item.type !== 'payment') totalItemsCost += qty * price;
   });
 
   const totalTablePayments = items.filter(i => i.type === 'payment').reduce((sum, i) => sum + parseNumber(i.price), 0);
@@ -1186,9 +1106,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
 
   const updateItem = (id: number, field: string, value: any) => {
     let processedVal = value;
-    if (field === 'quantity' || field === 'price') {
-      processedVal = convertToEnglishDigits(value);
-    }
+    if (field === 'quantity' || field === 'price') processedVal = convertToEnglishDigits(value);
     setItems(items.map(i => i.id === id ? { ...i, [field]: processedVal } : i));
   };
 
@@ -1198,9 +1116,7 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
       const dateStr = new Date().toLocaleDateString('en-GB');
       const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
       setItems([{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }]);
-    } else {
-      setItems(filtered);
-    }
+    } else setItems(filtered);
   };
 
   const ITEMS_PER_PAGE = 15;
@@ -1214,7 +1130,10 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
   return (
     <div className="w-full pb-20">
       <div className="max-w-[210mm] mx-auto flex justify-between items-center mb-6 print-hide">
-        <h2 className={`text-2xl font-bold ${theme.text}`}>دروستکردنی وەسڵی نەقدی</h2>
+        <div className="flex items-center gap-3">
+          <h2 className={`text-2xl font-bold ${theme.text}`}>دروستکردنی وەسڵی نەقدی</h2>
+          <span className="text-sm font-black bg-gray-200 text-gray-700 px-3 py-1 rounded-lg">ژمارەی وەسڵ: #{draftSerial}</span>
+        </div>
         <div className="flex gap-4">
           <button type="button" onClick={startNewReceipt} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus size={20} /> وەسڵی نوێ</button>
           <button type="button" onClick={addPayment} className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-bold flex items-center gap-1 text-sm"><MinusCircle size={16} /> پارەدان</button>
@@ -1224,24 +1143,19 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
 
       {pagesArray.map((pageObj, pIndex) => {
         const isLastPage = pIndex === totalPages - 1;
-
         return (
           <div key={pIndex} className="a4-page shadow-lg mx-auto flex flex-col justify-between mb-8">
             <div>
-              <div className="text-center mb-6 border-b-2 border-black pb-4">
-                <h1 className={`text-3xl font-black ${theme.text} mb-2`}>توانا</h1>
-                <p className="font-bold text-sm mb-1">بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
-                <p className="font-medium text-xs mb-1">ناونیشان: کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
-                <p className="font-bold text-sm mt-2" dir="ltr">0750 497 8758 - 0750 017 2002</p>
-              </div>
+              <ReceiptBrandingHeader theme={theme} />
 
-              <div className="flex justify-between mb-6 font-bold text-base px-2">
+              <div className="flex justify-between mb-5 font-bold text-base px-2">
                 <div className="flex flex-col gap-2 w-1/2">
                   <div className="flex items-center gap-2"><span className="w-20">ناوی کڕیار:</span><input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="border-b-2 border-black bg-transparent outline-none flex-1 pb-0.5 text-base font-bold" /></div>
                   <div className="flex items-center gap-2"><span className="w-20">مۆبایل:</span><input type="text" value={customerPhone} onChange={(e) => setCustomerPhone(convertToEnglishDigits(e.target.value))} className="border-b-2 border-black bg-transparent outline-none flex-1 pb-0.5 text-base font-bold text-right" placeholder="0750 000 0000" dir="ltr" style={{ unicodeBidi: 'plaintext', textAlign: 'right' }} /></div>
                 </div>
                 <div className="text-left flex flex-col gap-1">
                   <p>بەروار: {new Date().toLocaleDateString('en-IQ')}</p>
+                  <p>ژمارەی وەسڵ: <span className="font-black">#{draftSerial}</span></p>
                   <p>جۆری وەسڵ: <span className={theme.textDark}>نەقدی (پەڕەی {pageObj.pageNum} لە {totalPages})</span></p>
                 </div>
               </div>
@@ -1266,63 +1180,19 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                     const priceNum = parseNumber(item.price);
                     const qtyNum = parseNumber(item.quantity);
                     const lineTotal = item.type === 'payment' ? priceNum : qtyNum * priceNum;
-
                     return (
                       <tr key={item.id} className={`${item.type === 'payment' ? 'bg-green-50' : 'bg-white'} text-xs`}>
                         <td className="border-2 border-black p-0.5 font-bold">{globalIdx + 1}</td>
-
                         <td className="border-2 border-black p-0.5">
-                          <input
-                            type="text"
-                            value={item.name}
-                            onChange={(e) => updateItem(item.id, 'name', e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                const nextInput = document.getElementById(`cash-qty-${item.id}`);
-                                if (nextInput) nextInput.focus();
-                              }
-                            }}
-                            className={`w-full text-right p-1 bg-transparent outline-none font-bold text-xs ${item.type === 'payment' ? 'text-green-700' : ''}`}
-                            placeholder="ناو..."
-                          />
+                          <input type="text" value={item.name} onChange={(e) => updateItem(item.id, 'name', e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const ni = document.getElementById(`cash-qty-${item.id}`); if (ni) ni.focus(); } }}
+                            className={`w-full text-right p-1 bg-transparent outline-none font-bold text-xs ${item.type === 'payment' ? 'text-green-700' : ''}`} placeholder="ناو..." />
                         </td>
-
                         <td className="border-2 border-black p-0.5">
-                          {item.type === 'payment' ? (
-                            <input
-                              id={`cash-qty-${item.id}`}
-                              type="text"
-                              value={item.quantity}
-                              onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  const nextInput = document.getElementById(`cash-price-${item.id}`);
-                                  if (nextInput) nextInput.focus();
-                                }
-                              }}
-                              className="w-full text-center p-1 bg-transparent outline-none font-bold text-xs"
-                              placeholder="بڕی پارە"
-                            />
-                          ) : (
-                            <input
-                              id={`cash-qty-${item.id}`}
-                              type="text"
-                              value={item.quantity}
-                              onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  const nextInput = document.getElementById(`cash-price-${item.id}`);
-                                  if (nextInput) nextInput.focus();
-                                }
-                              }}
-                              className="w-full text-center p-1 bg-transparent outline-none font-bold text-xs"
-                            />
-                          )}
+                          <input id={`cash-qty-${item.id}`} type="text" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const ni = document.getElementById(`cash-price-${item.id}`); if (ni) ni.focus(); } }}
+                            className="w-full text-center p-1 bg-transparent outline-none font-bold text-xs" placeholder={item.type === 'payment' ? 'بڕی پارە' : ''} />
                         </td>
-
                         <td className="border-2 border-black p-0.5">
                           {item.type === 'payment' ? <span className="text-gray-400 font-bold">-</span> : (
                             <select value={item.unit} onChange={(e) => updateItem(item.id, 'unit', e.target.value)} className="w-full text-center bg-transparent outline-none font-bold text-[10px] print:appearance-none">
@@ -1330,70 +1200,31 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
                             </select>
                           )}
                         </td>
-
                         <td className="border-2 border-black p-0.5">
-                          <input
-                            id={`cash-price-${item.id}`}
-                            type="text"
-                            value={item.price}
-                            onChange={(e) => updateItem(item.id, 'price', e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                const nextInput = document.getElementById(`cash-note-${item.id}`);
-                                if (nextInput) nextInput.focus();
-                              }
-                            }}
-                            className="w-full text-center p-1 bg-transparent outline-none font-bold text-xs"
-                            placeholder={item.type === 'payment' ? 'بڕی پارە' : ''}
-                          />
+                          <input id={`cash-price-${item.id}`} type="text" value={item.price} onChange={(e) => updateItem(item.id, 'price', e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const ni = document.getElementById(`cash-note-${item.id}`); if (ni) ni.focus(); } }}
+                            className="w-full text-center p-1 bg-transparent outline-none font-bold text-xs" placeholder={item.type === 'payment' ? 'بڕی پارە' : ''} />
                         </td>
-
                         <td className={`border-2 border-black p-0.5 font-black text-xs ${item.type === 'payment' ? 'text-green-600' : 'text-red-600'}`} dir="ltr">
-                          {item.type === 'payment' ? `- ${lineTotal.toLocaleString()}` : lineTotal.toLocaleString()}
+                          {item.type === 'payment' ? `- ${fmtNum(lineTotal)}` : fmtNum(lineTotal)}
                         </td>
-
                         <td className="border-2 border-black p-0.5 text-[9px] font-bold text-gray-700 leading-tight">
                           <div dir="ltr">{item.dateStr || '26/07/2026'}</div>
                           <div dir="ltr" className="text-gray-500">{item.timeStr || '12:30'}</div>
                         </td>
-
                         <td className="border-2 border-black p-0.5">
                           {item.type === 'payment' ? (
-                            <select
-                              id={`cash-note-${item.id}`}
-                              value={item.note || 'زیاد کریم'}
-                              onChange={(e) => updateItem(item.id, 'note', e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  addItem();
-                                }
-                              }}
-                              className="w-full text-center bg-transparent outline-none font-bold text-[10px] text-blue-700 print:appearance-none"
-                            >
-                              <option value="زیاد کریم">زیاد کریم</option>
-                              <option value="زانا زیاد">زانا زیاد</option>
-                              <option value="شاگرد">شاگرد</option>
+                            <select id={`cash-note-${item.id}`} value={item.note || 'زیاد کریم'} onChange={(e) => updateItem(item.id, 'note', e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }}
+                              className="w-full text-center bg-transparent outline-none font-bold text-[10px] text-blue-700 print:appearance-none">
+                              <option value="زیاد کریم">زیاد کریم</option><option value="زانا زیاد">زانا زیاد</option><option value="شاگرد">شاگرد</option>
                             </select>
                           ) : (
-                            <input
-                              id={`cash-note-${item.id}`}
-                              type="text"
-                              value={item.note || ''}
-                              onChange={(e) => updateItem(item.id, 'note', e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  addItem();
-                                }
-                              }}
-                              className="w-full text-right p-1 bg-transparent outline-none font-normal text-[10px] text-black"
-                              placeholder="تێبینی..."
-                            />
+                            <input id={`cash-note-${item.id}`} type="text" value={item.note || ''} onChange={(e) => updateItem(item.id, 'note', e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }}
+                              className="w-full text-right p-1 bg-transparent outline-none font-normal text-[10px] text-black" placeholder="تێبینی..." />
                           )}
                         </td>
-
                         <td className="border-2 border-black p-0.5 print-hide">
                           <button type="button" onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
                         </td>
@@ -1405,37 +1236,29 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId }: any) {
             </div>
 
             <div className="mt-auto">
-
               <div className="flex justify-between items-end mt-4">
                 {isLastPage ? (
                   <>
-                    <div className="flex gap-16 text-base font-bold">
-                      <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-                      <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-                    </div>
-
-                    <div className="border-4 border-black p-4 w-80 text-center bg-gray-100 space-y-2">
-                      <div className="flex justify-between font-bold text-sm">
-                        <span>کۆی گشتی پارە:</span>
-                        <span dir="ltr" className="font-black">{totalItemsCost.toLocaleString()}</span>
+                    <SignatureSection />
+                    <ReceiptSummaryBox>
+                      <div className="space-y-2">
+                        <div className="flex justify-between font-bold text-sm">
+                          <span>کۆی گشتی پارە:</span>
+                          <span dir="ltr" className="font-black">{fmtNum(totalItemsCost)}</span>
+                        </div>
+                        <div className="flex justify-between items-center font-bold text-sm text-green-600">
+                          <span>پارەی دراو:</span>
+                          <input type="text" value={amountPaid} onChange={(e) => setAmountPaid(convertToEnglishDigits(e.target.value))}
+                            className="w-28 text-center p-1 bg-white border border-gray-400 rounded outline-none font-black text-base text-green-700 print:border-none print:text-green-700 print:bg-transparent"
+                            placeholder={effectivePaid > 0 ? fmtNum(effectivePaid) : "0"} dir="ltr" />
+                        </div>
+                        <div className="border-t-2 border-gray-400 my-1"></div>
+                        <div className="flex justify-between font-bold text-base">
+                          <span>باقی ماوە:</span>
+                          <span className={`text-xl font-black ${amountColorClass(remainingBalance)}`} dir="ltr">{fmtNum(remainingBalance)} دینار</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between items-center font-bold text-sm text-green-600">
-                        <span>پارەی دراو:</span>
-                        <input
-                          type="text"
-                          value={amountPaid}
-                          onChange={(e) => setAmountPaid(convertToEnglishDigits(e.target.value))}
-                          className="w-28 text-center p-1 bg-white border border-gray-400 rounded outline-none font-black text-base text-green-700 print:border-none print:text-green-700 print:bg-transparent"
-                          placeholder={effectivePaid > 0 ? effectivePaid.toLocaleString() : "0"}
-                          dir="ltr"
-                        />
-                      </div>
-                      <div className="border-t-2 border-gray-400 my-1"></div>
-                      <div className="flex justify-between font-bold text-base">
-                        <span>باقی ماوە:</span>
-                        <span className="text-xl font-black text-red-700" dir="ltr">{remainingBalance.toLocaleString()} دینار</span>
-                      </div>
-                    </div>
+                    </ReceiptSummaryBox>
                   </>
                 ) : (
                   <div className="w-full flex justify-between items-center text-xs font-bold text-gray-500 mt-4">
@@ -1457,19 +1280,15 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
   return (
     <div className="a4-page bg-white border text-black mx-auto flex flex-col justify-between shadow-sm">
       <div>
-        <div className="text-center mb-6 border-b-2 border-black pb-4">
-          <h1 className={`text-3xl font-black ${theme?.text || 'text-blue-900'} mb-2`}>توانا</h1>
-          <p className="font-bold text-sm mb-1">بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
-          <p className="font-medium text-xs mb-1">ناونیشان: کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
-          <p className="font-bold text-sm mt-2" dir="ltr">0750 497 8758 - 0750 017 2002</p>
-        </div>
-        <div className="flex justify-between mb-6 font-bold text-base px-2">
+        <ReceiptBrandingHeader theme={theme} />
+        <div className="flex justify-between mb-5 font-bold text-base px-2">
           <div className="flex flex-col gap-2 w-1/2">
             <p>ناوی کڕیار: <span className="mr-2 text-lg font-black border-b-2 border-black pb-0.5 px-3">{receipt.customerName || '---'}</span></p>
             <p>مۆبایل: <span className="mr-2 text-lg font-black border-b-2 border-black pb-0.5 px-3"><span dir="ltr" style={{ unicodeBidi: 'plaintext' }}>{receipt.phone || '---'}</span></span></p>
           </div>
           <div className="text-left flex flex-col gap-1">
             <p>بەروار: {new Date(receipt.date).toLocaleDateString('en-IQ')}</p>
+            {receipt.serialNumber && <p>ژمارەی وەسڵ: <span className="font-black">#{receipt.serialNumber}</span></p>}
             <p>جۆری وەسڵ: <span className="text-emerald-700">نەقدی</span></p>
           </div>
         </div>
@@ -1490,16 +1309,15 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
               const priceNum = parseNumber(item.price);
               const qtyNum = parseNumber(item.quantity);
               const lineTotal = item.type === 'payment' ? priceNum : qtyNum * priceNum;
-
               return (
                 <tr key={item.id} className={`${item.type === 'payment' ? 'bg-green-50' : 'bg-white'} text-xs`}>
                   <td className="border-2 border-black p-1.5 font-bold">{index + 1}</td>
                   <td className="border-2 border-black p-1.5 text-right font-bold">{item.name}</td>
                   <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.quantity}</td>
                   <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.unit}</td>
-                  <td className="border-2 border-black p-1.5 font-bold">{priceNum.toLocaleString()}</td>
+                  <td className="border-2 border-black p-1.5 font-bold" dir="ltr">{fmtNum(priceNum)}</td>
                   <td className={`border-2 border-black p-1.5 font-black text-sm ${item.type === 'payment' ? 'text-green-600' : 'text-red-600'}`} dir="ltr">
-                    {item.type === 'payment' ? `- ${lineTotal.toLocaleString()}` : lineTotal.toLocaleString()}
+                    {item.type === 'payment' ? `- ${fmtNum(lineTotal)}` : fmtNum(lineTotal)}
                   </td>
                   <td className="border-2 border-black p-1.5 font-bold text-xs text-blue-700">{item.note || '-'}</td>
                 </tr>
@@ -1511,17 +1329,197 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
 
       <div className="mt-auto">
         <div className="flex justify-between items-end pt-4 mt-4">
-          <div className="flex gap-16 text-base font-bold">
-            <div className="text-center"><p>ئیمزای کڕیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-            <div className="text-center"><p>مۆر و ئیمزای فرۆشیار</p><div className="mt-8 border-b-2 border-dotted border-black w-32"></div></div>
-          </div>
-          <div className="border-4 border-black p-4 w-72 text-center bg-gray-100">
-            <p className="text-base font-bold">کۆی پارەی ئەم وەسڵە</p>
-            <p className={`text-2xl font-black mt-1 ${theme?.textDark || 'text-emerald-700'}`}>{receipt.totalAmount.toLocaleString()} دینار</p>
-          </div>
+          <SignatureSection />
+          <ReceiptSummaryBox>
+            <div className="text-center">
+              <p className="text-base font-bold">کۆی پارەی ئەم وەسڵە</p>
+              <p className={`text-2xl font-black mt-1 ${amountColorClass(receipt.totalAmount)}`} dir="ltr">{fmtNum(receipt.totalAmount)} دینار</p>
+            </div>
+          </ReceiptSummaryBox>
         </div>
         <div className="text-center mt-6 text-xs text-gray-400 font-sans" dir="ltr">Designed and Developed by Eng. Masrour</div>
       </div>
+    </div>
+  );
+}
+
+function StaticDebtReceiptTemplate({ receipt, customer, theme }: any) {
+  let totalItemsCost = 0;
+  let totalPaymentsMade = 0;
+  receipt.items.forEach((item: ReceiptItem) => {
+    const price = parseNumber(item.price);
+    const qty = parseNumber(item.quantity);
+    if (item.type === 'payment') totalPaymentsMade += price;
+    else totalItemsCost += qty * price;
+  });
+  const receiptTotal = totalItemsCost - totalPaymentsMade;
+
+  return (
+    <div className="a4-page bg-white border text-black mx-auto flex flex-col justify-between shadow-sm">
+      <div>
+        <ReceiptBrandingHeader theme={theme} />
+        <div className="flex justify-between mb-5 font-bold text-base px-2">
+          <div className="flex flex-col gap-2 w-1/2">
+            <p>ناوی کڕیار: <span className="mr-2 text-lg font-black border-b-2 border-black pb-0.5 px-3">{customer.name}</span></p>
+            <p>مۆبایل: <span className="mr-2 text-lg font-black border-b-2 border-black pb-0.5 px-3"><span dir="ltr" style={{ unicodeBidi: 'plaintext' }}>{customer.phone || '---'}</span></span></p>
+          </div>
+          <div className="text-left flex flex-col gap-1">
+            <p>بەروار: {receipt.date ? new Date(receipt.date).toLocaleDateString('en-IQ') : ''}</p>
+            {receipt.serialNumber && <p>ژمارەی وەسڵ: <span className="font-black">#{receipt.serialNumber}</span></p>}
+            <p>جۆری وەسڵ: <span className="text-red-700">قەرز</span></p>
+          </div>
+        </div>
+        <table className="w-full border-collapse border-2 border-black text-center mt-2">
+          <thead>
+            <tr className="bg-gray-200 text-xs">
+              <th className="border-2 border-black p-1 w-6">#</th>
+              <th className="border-2 border-black p-1 text-right">ناوی ماددە (کاڵا) / پارەدان</th>
+              <th className="border-2 border-black p-1 w-10">بڕ</th>
+              <th className="border-2 border-black p-1 w-16">یەکە</th>
+              <th className="border-2 border-black p-1 w-20">نرخی دانە</th>
+              <th className="border-2 border-black p-1 w-24">کۆی گشتی</th>
+              <th className="border-2 border-black p-1 w-28">تێبینی</th>
+            </tr>
+          </thead>
+          <tbody>
+            {receipt.items.map((item: ReceiptItem, index: number) => {
+              const priceNum = parseNumber(item.price);
+              const qtyNum = parseNumber(item.quantity);
+              const lineTotal = item.type === 'payment' ? priceNum : qtyNum * priceNum;
+              return (
+                <tr key={item.id} className={`${item.type === 'payment' ? 'bg-green-50' : 'bg-white'} text-xs`}>
+                  <td className="border-2 border-black p-1.5 font-bold">{index + 1}</td>
+                  <td className="border-2 border-black p-1.5 text-right font-bold">{item.name}</td>
+                  <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.quantity}</td>
+                  <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.unit}</td>
+                  <td className="border-2 border-black p-1.5 font-bold" dir="ltr">{fmtNum(priceNum)}</td>
+                  <td className={`border-2 border-black p-1.5 font-black text-sm ${item.type === 'payment' ? 'text-green-600' : 'text-red-600'}`} dir="ltr">
+                    {item.type === 'payment' ? `- ${fmtNum(lineTotal)}` : fmtNum(lineTotal)}
+                  </td>
+                  <td className="border-2 border-black p-1.5 font-bold text-xs text-blue-700">{item.note || '-'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-auto">
+        <div className="flex justify-between items-end pt-4 mt-4">
+          <SignatureSection />
+          <ReceiptSummaryBox>
+            <div className="space-y-2">
+              <div className="flex justify-between font-bold text-sm">
+                <span>کۆی کاڵاکان:</span>
+                <span dir="ltr" className="font-black">{fmtNum(totalItemsCost)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-sm text-green-600">
+                <span>پارەی دراو (واصڵ):</span>
+                <span dir="ltr" className="font-black">- {fmtNum(totalPaymentsMade)}</span>
+              </div>
+              <div className="border-t-2 border-gray-400 my-1"></div>
+              <div className="flex justify-between font-bold text-base">
+                <span>کۆی ئەم وەسڵە:</span>
+                <span className={`text-xl font-black ${amountColorClass(receiptTotal)}`} dir="ltr">{fmtNum(receiptTotal)} دینار</span>
+              </div>
+              <div className="flex justify-between font-bold text-sm mt-2">
+                <span>باڵانسی ئێستای کڕیار:</span>
+                <span className={`font-black ${amountColorClass(customer.balance)}`} dir="ltr">{fmtNum(customer.balance)} دینار</span>
+              </div>
+            </div>
+          </ReceiptSummaryBox>
+        </div>
+        <div className="text-center mt-6 text-xs text-gray-400 font-sans" dir="ltr">Designed and Developed by Eng. Masrour</div>
+      </div>
+    </div>
+  );
+}
+
+function DebtReceiptsArchiveView({ isDark, customers, theme }: any) {
+  const [search, setSearch] = useState('');
+  const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
+
+  const allDebtReceipts: any[] = [];
+  customers.forEach((c: Customer) => {
+    c.debtReceipts.forEach(r => {
+      if (!r.items || r.items.length === 0) return;
+      const hasContent = r.items.some(i => i.name || i.price || i.quantity);
+      if (!hasContent) return;
+
+      let totalItemsCost = 0;
+      let totalPaymentsMade = 0;
+      r.items.forEach(i => {
+        const price = parseNumber(i.price);
+        const qty = parseNumber(i.quantity);
+        if (i.type === 'payment') totalPaymentsMade += price;
+        else totalItemsCost += qty * price;
+      });
+
+      allDebtReceipts.push({
+        ...r,
+        customerName: c.name,
+        phone: c.phone,
+        customerBalance: c.balance,
+        receiptTotal: totalItemsCost - totalPaymentsMade
+      });
+    });
+  });
+
+  allDebtReceipts.sort((a, b) => (b.serialNumber || 0) - (a.serialNumber || 0));
+
+  const filtered = allDebtReceipts.filter(r => {
+    const q = search.trim();
+    if (!q) return true;
+    const serialStr = r.serialNumber ? String(r.serialNumber) : '';
+    return (r.customerName && r.customerName.includes(q)) ||
+           (r.phone && r.phone.includes(q)) ||
+           (serialStr && serialStr.includes(q));
+  });
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      <div className="mb-8 flex justify-between items-center print-hide">
+        <div>
+          <h2 className="text-3xl font-bold mb-2">ئەرشیفی وەسڵە قەرزییەکان</h2>
+          <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>گەڕان و چاپکردنی وەسڵە قەرزییەکان بەپێی ژمارەی سریال</p>
+        </div>
+      </div>
+
+      {!selectedReceipt ? (
+        <div className="print-hide">
+          <div className={`mb-6 flex items-center gap-3 px-4 py-3 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300 shadow-sm'}`}>
+            <Search className="text-gray-400" size={20} />
+            <input type="text" placeholder="گەڕان بەپێی ژمارەی وەسڵ، ناوی کڕیار، یان مۆبایل..." className={`w-full bg-transparent outline-none font-medium ${isDark ? 'text-white' : 'text-black'}`} value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Hash size={18} className="text-gray-400" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filtered.map((receipt) => (
+              <div key={receipt.id} className={`p-4 rounded-xl border flex justify-between items-center transition-all cursor-pointer hover:scale-[1.02] ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`} onClick={() => setSelectedReceipt(receipt)}>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    {receipt.serialNumber && <span className="text-xs font-black bg-gray-200 text-gray-700 px-2 py-0.5 rounded">#{receipt.serialNumber}</span>}
+                    <p className="font-bold text-lg">{receipt.customerName}</p>
+                  </div>
+                  <p className="text-sm text-gray-500">{receipt.date ? new Date(receipt.date).toLocaleDateString('en-IQ') : ''} - <span dir="ltr">{receipt.phone || '---'}</span></p>
+                </div>
+                <div className="text-left">
+                  <p className={`font-black text-xl ${amountColorClass(receipt.receiptTotal)}`}>{fmtNum(receipt.receiptTotal)} د.ع</p>
+                  <p className={`text-xs font-bold ${amountColorClass(receipt.customerBalance)}`}>باڵانس: {fmtNum(receipt.customerBalance)} د.ع</p>
+                </div>
+              </div>
+            ))}
+            {filtered.length === 0 && <p className="text-center col-span-2 p-10 text-gray-500">هیچ وەسڵێک نەدۆزرایەوە.</p>}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="mb-4 flex gap-4 print-hide">
+            <button type="button" onClick={() => setSelectedReceipt(null)} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-bold">گەڕانەوە بۆ لیست</button>
+            <button type="button" onClick={() => window.print()} className={`${theme.main} ${theme.hover} text-white px-4 py-2 rounded-lg font-bold flex gap-2`}><Printer size={20} /> چاپکردن / PDF</button>
+          </div>
+          <StaticDebtReceiptTemplate receipt={selectedReceipt} customer={{ name: selectedReceipt.customerName, phone: selectedReceipt.phone, balance: selectedReceipt.customerBalance }} theme={theme} />
+        </div>
+      )}
     </div>
   );
 }
