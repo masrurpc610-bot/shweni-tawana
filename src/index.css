@@ -45,7 +45,10 @@
   .a4-page {
     width: 100% !important;
     max-width: 198mm !important;
-    min-height: 285mm !important;
+    height: 285mm !important;
+    min-height: unset !important;
+    max-height: 285mm !important;
+    overflow: hidden !important;
     margin: 0 auto !important;
     padding: 3mm 5mm !important;
     box-sizing: border-box !important;
@@ -57,13 +60,20 @@
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
-    page-break-after: always;
-    break-after: page;
+    page-break-after: always !important;
+    break-after: page !important;
   }
 
   .a4-page:last-child {
     page-break-after: avoid !important;
     break-after: avoid !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Prevent phantom blank page from body/html overflow */
+  body, html {
+    overflow: hidden !important;
+    height: auto !important;
   }
 
   input,
