@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import {
   LayoutDashboard, Users, ReceiptText, Building2,
-  Moon, Sun, Search, Trash2, Edit, BookOpen, Plus, X, Printer, FileText, ArrowRight, MinusCircle, LogOut, Lock, User, Hash
+  Moon, Sun, Search, Trash2, Edit, BookOpen, Plus, X, Printer, FileText, ArrowRight, MinusCircle, LogOut, Lock, User, Hash, Eye, EyeOff
 } from 'lucide-react';
 
 type ReceiptItem = { id: number; name: string; quantity: number | string; unit: string; price: number | string; isNew: boolean; type?: 'item' | 'payment'; note?: string; dateStr?: string; timeStr?: string };
@@ -396,10 +396,9 @@ function ReceiptBrandingHeader({ theme }: { theme: any }) {
 
         {/* Right: Company name & address */}
         <div className="relative z-10 flex-1 flex flex-col justify-center text-right" style={{ paddingRight: '8px', paddingLeft: '4px', paddingTop: '4px' }}>
-          <h1 className="font-black leading-none text-gray-900" style={{ fontSize: '54px', fontFamily: 'serif' }}>توانا</h1>
-          <p className="font-bold text-gray-800" style={{ fontSize: '10px', marginTop: '2px' }}>بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
-          <p className="text-gray-600" style={{ fontSize: '8.5px', marginTop: '2px' }}>هەولێر - پێشەسازی باکوور - کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
-          <p className="text-gray-500" dir="ltr" style={{ fontSize: '7.5px', marginTop: '1px' }}>Erbil - North Industry - General Street, Near Afrin Gas Station</p>
+          <h1 className="font-black leading-none" style={{ fontSize: '58px', fontFamily: 'serif', color: '#1e3a8a' }}>توانا</h1>
+          <p className="font-bold text-gray-800" style={{ fontSize: '12px', marginTop: '3px' }}>بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
+          <p className="text-gray-700" style={{ fontSize: '10.5px', marginTop: '3px' }}>هەولێر - پێشەسازی باکوور - کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
         </div>
       </div>
 
@@ -419,23 +418,14 @@ function ReceiptSummaryBox({ children }: { children: React.ReactNode }) {
 
 function SignatureSection() {
   return (
-    <div className="flex gap-6 items-center font-bold">
+    <div className="flex gap-12 items-center font-bold">
       <div className="text-center">
-        <p style={{ fontSize: '11px' }}>ئیمزای کڕیار</p>
-        <div className="mt-8 border-b-2 border-dotted border-black mx-auto" style={{ width: '110px' }} />
-      </div>
-      <div className="text-center flex-shrink-0">
-        <div className="border-2 border-dashed border-gray-500 rounded-full mx-auto flex flex-col items-center justify-center" style={{ width: '78px', height: '78px' }}>
-          <div className="text-gray-700 font-black leading-tight text-center">
-            <div style={{ fontSize: '7px' }}>مۆر و ئیمزا</div>
-            <div className="text-gray-900" style={{ fontSize: '14px' }}>Masrur</div>
-            <div className="text-gray-500" style={{ fontSize: '6px' }}>Eng. Design</div>
-          </div>
-        </div>
+        <p style={{ fontSize: '12px' }}>ئیمزای کڕیار</p>
+        <div className="mt-8 border-b-2 border-dotted border-black mx-auto" style={{ width: '130px' }} />
       </div>
       <div className="text-center">
-        <p style={{ fontSize: '11px' }}>مۆر و ئیمزای فرۆشیار</p>
-        <div className="mt-8 border-b-2 border-dotted border-black mx-auto" style={{ width: '110px' }} />
+        <p style={{ fontSize: '12px' }}>مۆر و ئیمزای فرۆشیار</p>
+        <div className="mt-8 border-b-2 border-dotted border-black mx-auto" style={{ width: '130px' }} />
       </div>
     </div>
   );
@@ -443,24 +433,11 @@ function SignatureSection() {
 
 function ReceiptPhoneBanner() {
   return (
-    <div>
-      <div className="flex items-center justify-between mt-3 rounded-xl px-4 py-2.5" style={{ background: '#e05a2b' }}>
-        <div className="flex items-center gap-3">
-          <span className="text-white" style={{ fontSize: '18px' }}>&#9990;</span>
-          <div className="font-bold text-white" style={{ fontSize: '11px', display: 'grid', gridTemplateColumns: 'repeat(3,auto)', columnGap: '24px', rowGap: '3px' }} dir="ltr">
-            <span>0750 446 4177</span><span>0750 590 5656</span><span>0751 595 5656</span>
-            <span>0770 446 4177</span><span>0750 595 5656</span><span>0751 551 5656</span>
-          </div>
-        </div>
-        <div className="bg-white p-1 rounded" style={{ width: '50px', height: '50px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gridTemplateRows: 'repeat(6,1fr)', width: '100%', height: '100%', gap: '1px' }}>
-            {[1,1,1,0,1,0,1,0,1,0,0,1,1,1,1,1,0,1,0,0,0,0,1,0,1,0,1,1,1,1,0,1,0,0,1,0].map((v,i) => (
-              <div key={i} style={{ background: v ? '#000' : '#fff' }} />
-            ))}
-          </div>
-        </div>
+    <div className="flex items-center justify-center mt-3 rounded-xl px-4 py-3" style={{ background: '#e05a2b' }}>
+      <span className="text-white ml-3" style={{ fontSize: '18px' }}>&#9990;</span>
+      <div className="font-bold text-white" style={{ fontSize: '14px' }} dir="ltr">
+        0750 497 8758 &nbsp;-&nbsp; 0750 017 2002
       </div>
-      <div className="text-center mt-1.5 text-gray-400 font-sans" style={{ fontSize: '8px' }} dir="ltr">Designed and Developed by Eng. Masrour</div>
     </div>
   );
 }
@@ -471,6 +448,8 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
   const [selectedReceipt, setSelectedReceipt] = useState<SavedReceipt | null>(null);
   const [receiptSearch, setReceiptSearch] = useState('');
   const [editingReceipt, setEditingReceipt] = useState<SavedReceipt | null>(null);
+  const [hideBalance, setHideBalance] = useState(false);
+  const displayAmount = (n: number | string) => hideBalance ? '***' : fmtNum(n);
 
   const filterByTime = (dateString: string) => {
     if (timeFilter === 'هەموو کات') return true;
@@ -526,18 +505,25 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
     <div className="max-w-6xl mx-auto">
       <div className="mb-8 flex justify-between items-center print-hide">
         <div><h2 className="text-3xl font-bold mb-2">داشبۆرد</h2><p className={isDark ? 'text-gray-400' : 'text-gray-500'}>پوختەیەکی گشتی بەپێی کاتی دیاریکراو</p></div>
-        <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className={`px-4 py-2 rounded-lg font-bold outline-none cursor-pointer ${isDark ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-200 border shadow-sm'}`}>
-          <option>ئەمڕۆ</option><option>ئەم هەفتەیە</option><option>ئەم مانگە</option><option>ئەم ساڵە</option><option>هەموو کات</option>
-        </select>
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={() => setHideBalance(!hideBalance)}
+            className={`p-2.5 rounded-lg border transition-all ${isDark ? 'bg-gray-800 border-gray-600 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'} ${hideBalance ? 'text-amber-500' : isDark ? 'text-gray-400' : 'text-gray-500'}`}
+            title={hideBalance ? 'پیشاندانی ژمارەکان' : 'شاردنەوەی ژمارەکان'}>
+            {hideBalance ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+          <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className={`px-4 py-2 rounded-lg font-bold outline-none cursor-pointer ${isDark ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-200 border shadow-sm'}`}>
+            <option>ئەمڕۆ</option><option>ئەم هەفتەیە</option><option>ئەم مانگە</option><option>ئەم ساڵە</option><option>هەموو کات</option>
+          </select>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 print-hide">
-        <DashboardCard title="کۆی قەرزەکانمان" amount={fmtNum(totalDebt)} suffix="د.ع" icon={ReceiptText} isDark={isDark} />
+        <DashboardCard title="کۆی قەرزەکانمان" amount={displayAmount(totalDebt)} suffix="د.ع" icon={ReceiptText} isDark={isDark} />
 
         <div onClick={() => setShowPaymentsModal(true)} className={`cursor-pointer hover:scale-105 transform transition-all duration-200 p-6 rounded-xl border flex flex-col items-center justify-center gap-4 ${isDark ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
           <div className={isDark ? 'bg-gray-700 p-3 rounded-2xl' : 'bg-gray-50 p-3 rounded-2xl'}><BookOpen className="text-blue-500" size={24} /></div>
           <div className="text-center">
-            <div className="text-2xl font-black flex items-center justify-center gap-1"><span>{fmtNum(totalPaymentsCollected)}</span><span className="text-sm font-bold text-gray-400">د.ع</span></div>
+            <div className="text-2xl font-black flex items-center justify-center gap-1"><span>{displayAmount(totalPaymentsCollected)}</span><span className="text-sm font-bold text-gray-400">د.ع</span></div>
             <div className={`text-sm mt-1 font-bold flex items-center justify-center gap-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>قەرزی وەرگیراوە (واصڵ) <FileText size={14} /></div>
           </div>
         </div>
@@ -545,7 +531,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
         <div onClick={() => setShowReceiptModal(true)} className={`cursor-pointer hover:scale-105 transform transition-all duration-200 p-6 rounded-xl border flex flex-col items-center justify-center gap-4 ${isDark ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
           <div className={isDark ? 'bg-gray-700 p-3 rounded-2xl' : 'bg-gray-50 p-3 rounded-2xl'}><Building2 className={theme.text} size={24} /></div>
           <div className="text-center">
-            <div className="text-2xl font-black flex items-center justify-center gap-1"><span>{fmtNum(totalCashSales)}</span><span className="text-sm font-bold text-gray-400">د.ع</span></div>
+            <div className="text-2xl font-black flex items-center justify-center gap-1"><span>{displayAmount(totalCashSales)}</span><span className="text-sm font-bold text-gray-400">د.ع</span></div>
             <div className={`text-sm mt-1 font-bold flex items-center justify-center gap-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>فرۆشتنی نەقدی <FileText size={14} /></div>
           </div>
         </div>
@@ -755,7 +741,7 @@ function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
 
 function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOpenLedger }: any) {
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'debt-high' | 'name' | 'date-old'>('debt-high');
+  const [sortBy, setSortBy] = useState<'debt-high' | 'debt-low' | 'name' | 'date-old'>('debt-high');
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [formData, setFormData] = useState({ name: '', phone: '', address: '', notes: '' });
@@ -766,6 +752,7 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
     .sort((a: Customer, b: Customer) => {
       if (sortBy === 'name') return a.name.localeCompare(b.name, 'ku');
       if (sortBy === 'debt-high') return b.balance - a.balance;
+      if (sortBy === 'debt-low') return a.balance - b.balance;
       if (sortBy === 'date-old') return new Date(a.date).getTime() - new Date(b.date).getTime();
       return 0;
     });
@@ -807,7 +794,7 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
 
       <div className="mb-6 flex items-center gap-2">
         <span className={`text-sm font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>ریزکردن:</span>
-        {([['debt-high','زۆری قەرزەکان'],['name','پیتی ناوەکان'],['date-old','کۆنی قەرزەکان']] as [string,string][]).map(([key, label]) => (
+        {([['debt-high','زۆری قەرزەکان'],['debt-low','کەمی قەرزەکان'],['name','پیتی ناوەکان'],['date-old','کۆنی قەرزەکان']] as [string,string][]).map(([key, label]) => (
           <button key={key} type="button" onClick={() => setSortBy(key as any)}
             className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all border ${
               sortBy === key
