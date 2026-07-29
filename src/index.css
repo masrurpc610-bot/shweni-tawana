@@ -18,7 +18,7 @@ html, body, #root {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 6mm;
+    margin: 0mm !important; /* لابردنی هەموو مارجنەکانی براوزەر */
   }
 
   html, body {
@@ -27,6 +27,10 @@ html, body, #root {
     font-size: 11pt !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    overflow: hidden !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   #root,
@@ -55,14 +59,14 @@ html, body, #root {
   }
 
   .a4-page {
-    width: 100% !important;
-    max-width: 198mm !important;
-    height: 277mm !important;
-    min-height: unset !important;
-    max-height: 277mm !important;
+    width: 210mm !important;
+    max-width: 210mm !important;
+    height: 268mm !important; /* کەمکردنەوەی بەرزیەکە بۆ ئەوەی هەرگیز سەری نەچێتە پەڕەی دووەم */
+    min-height: auto !important;
+    max-height: 268mm !important;
     overflow: hidden !important;
     margin: 0 auto !important;
-    padding: 3mm 5mm !important;
+    padding: 6mm 10mm !important;
     box-sizing: border-box !important;
     background: #ffffff !important;
     color: #000000 !important;
@@ -72,20 +76,15 @@ html, body, #root {
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
-    page-break-after: always !important;
-    break-after: page !important;
+    page-break-after: avoid !important; /* ڕێگریکردن لە دروستبوونی پەڕەی دووەم */
+    break-after: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .a4-page:last-child {
     page-break-after: avoid !important;
     break-after: avoid !important;
     margin-bottom: 0 !important;
-  }
-
-  /* Prevent phantom blank page from body/html overflow */
-  body, html {
-    overflow: hidden !important;
-    height: auto !important;
   }
 
   input,

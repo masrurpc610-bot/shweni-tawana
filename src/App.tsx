@@ -440,10 +440,7 @@ function ReceiptPhoneBanner() {
           0750 497 8758 &nbsp;-&nbsp; 0750 017 2002
         </div>
       </div>
-      {/* دەقی بچووکی گەشەپێدەر لە خوارەوەی ڕاستەقینەی وەسڵەکان */}
-      <div className="text-center mt-2 text-[10px] text-gray-400 font-sans" dir="ltr">
-        Designed and Developed by Eng. Masrour
-      </div>
+      <div className="text-center mt-2 text-[10px] text-gray-400 font-sans" dir="ltr">Designed and Developed by Eng. Masrur</div>
     </div>
   );
 }
