@@ -398,7 +398,7 @@ function ReceiptBrandingHeader({ theme }: { theme: any }) {
         <div className="relative z-10 flex-1 flex flex-col justify-center text-right" style={{ paddingRight: '8px', paddingLeft: '4px', paddingTop: '4px' }}>
           <h1 className="font-black leading-none" style={{ fontSize: '58px', fontFamily: 'serif', color: '#1e3a8a' }}>توانا</h1>
           <p className="font-bold text-gray-800" style={{ fontSize: '12px', marginTop: '3px' }}>بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
-          <p className="text-gray-700" style={{ fontSize: '10.5px', marginTop: '3px' }}>هەولێر - پێشەسازی باکوور - کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
+          <p className="text-gray-700" style={{ fontSize: '10.5px', marginTop: '3px' }}>هەولێر - کۆرێ شەقامی گشتی تەنیشت بەنزینخانەی ئەفرین</p>
         </div>
       </div>
 
@@ -433,10 +433,16 @@ function SignatureSection() {
 
 function ReceiptPhoneBanner() {
   return (
-    <div className="flex items-center justify-center mt-3 rounded-xl px-4 py-3" style={{ background: '#e05a2b' }}>
-      <span className="text-white ml-3" style={{ fontSize: '18px' }}>&#9990;</span>
-      <div className="font-bold text-white" style={{ fontSize: '14px' }} dir="ltr">
-        0750 497 8758 &nbsp;-&nbsp; 0750 017 2002
+    <div>
+      <div className="flex items-center justify-center mt-3 rounded-xl px-4 py-3" style={{ background: '#e05a2b' }}>
+        <span className="text-white ml-3" style={{ fontSize: '18px' }}>&#9990;</span>
+        <div className="font-bold text-white" style={{ fontSize: '14px' }} dir="ltr">
+          0750 497 8758 &nbsp;-&nbsp; 0750 017 2002
+        </div>
+      </div>
+      {/* دەقی بچووکی گەشەپێدەر لە خوارەوەی ڕاستەقینەی وەسڵەکان */}
+      <div className="text-center mt-2 text-[10px] text-gray-400 font-sans" dir="ltr">
+        Designed and Developed by Eng. Masrour
       </div>
     </div>
   );
