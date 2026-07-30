@@ -440,7 +440,10 @@ function ReceiptPhoneBanner() {
           0750 497 8758 &nbsp;-&nbsp; 0750 017 2002
         </div>
       </div>
-      <div className="text-center mt-2 text-[10px] text-gray-400 font-sans" dir="ltr">Designed and Developed by Eng. Masrur</div>
+      {/* دەقی بچووکی گەشەپێدەر لە خوارەوەی ڕاستەقینەی وەسڵەکان */}
+      <div className="text-center mt-2 text-[10px] text-gray-400 font-sans" dir="ltr">
+        Designed and Developed by Eng. Masrur
+      </div>
     </div>
   );
 }
@@ -810,11 +813,18 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
       <div className={`rounded-xl border overflow-hidden ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
         <table className="w-full text-right">
           <thead className={isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-600'}>
-            <tr><th className="p-4 font-bold">ناو</th><th className="p-4 font-bold">ژمارەی مۆبایل</th><th className="p-4 font-bold">باڵانس (قەرز)</th><th className="p-4 font-bold">کردارەکان</th></tr>
+            <tr>
+              <th className="p-4 font-bold w-12 text-center">#</th>
+              <th className="p-4 font-bold">ناو</th>
+              <th className="p-4 font-bold">ژمارەی مۆبایل</th>
+              <th className="p-4 font-bold">باڵانس (قەرز)</th>
+              <th className="p-4 font-bold">کردارەکان</th>
+            </tr>
           </thead>
           <tbody>
-            {filteredCustomers.map((customer: Customer) => (
+            {filteredCustomers.map((customer: Customer, index: number) => (
               <tr key={customer.id} className={`border-t transition-colors ${isDark ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-100 hover:bg-gray-50'}`}>
+                <td className="p-4 font-bold text-center text-gray-500 w-12">{index + 1}</td>
                 <td className={`p-4 font-bold cursor-pointer transition-colors hover:${theme.text}`} onClick={() => onOpenLedger(customer)}>{customer.name}</td>
                 <td className="p-4 cursor-pointer text-left" onClick={() => onOpenLedger(customer)}><span dir="ltr" style={{ unicodeBidi: 'plaintext' }}>{customer.phone || '---'}</span></td>
                 <td className={`p-4 font-bold cursor-pointer ${amountColorClass(customer.balance)}`} onClick={() => onOpenLedger(customer)}>{fmtNum(customer.balance)} د.ع</td>
