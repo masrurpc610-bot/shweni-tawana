@@ -1,5 +1,5 @@
 /* eslint-disable */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import {
   LayoutDashboard, Users, ReceiptText, Building2,
@@ -128,7 +128,9 @@ export default function App() {
     }} />;
   }
 
-  const handleAutoSaveCash = async (receiptData: Omit<SavedReceipt, 'id'>) => {
+  const cashSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleAutoSaveCash = useCallback((receiptData: Omit<SavedReceipt, 'id'>) => {
     const receiptToSave = { id: currentDraftId, serialNumber: currentDraftSerial, ...receiptData };
     setSavedReceipts(prev => {
       const exists = prev.find(r => r.id === currentDraftId);
@@ -136,12 +138,15 @@ export default function App() {
       else return [...prev, receiptToSave];
     });
 
-    const { error } = await supabase.from('cash_receipts').upsert({
-      id: currentDraftId, serial_number: currentDraftSerial, customer_name: receiptData.customerName, phone: receiptData.phone,
-      date: receiptData.date, total_amount: receiptData.totalAmount, items: receiptData.items
-    });
-    if (error) console.error('Error saving cash receipt:', error.message);
-  };
+    if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current);
+    cashSaveTimer.current = setTimeout(async () => {
+      const { error } = await supabase.from('cash_receipts').upsert({
+        id: currentDraftId, serial_number: currentDraftSerial, customer_name: receiptData.customerName, phone: receiptData.phone,
+        date: receiptData.date, total_amount: receiptData.totalAmount, items: receiptData.items
+      });
+      if (error) console.error('Error saving cash receipt:', error.message);
+    }, 800);
+  }, [currentDraftId, currentDraftSerial]);
 
   const startNewCashReceipt = () => {
     setCurrentDraftId(Date.now());
@@ -205,7 +210,9 @@ export default function App() {
     }
   };
 
-  const handleUpdateCustomerLedger = async (customerId: number, newReceipts: CustomerReceipt[]) => {
+  const ledgerSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+
+  const handleUpdateCustomerLedger = useCallback((customerId: number, newReceipts: CustomerReceipt[]) => {
     let total = 0;
     newReceipts.forEach(r => {
       r.items.forEach(i => {
@@ -216,29 +223,27 @@ export default function App() {
     });
 
     setCustomers(prev => {
-      const updated = prev.map(c => {
-        if (c.id === customerId) {
-          return { ...c, debtReceipts: newReceipts, balance: total };
-        }
-        return c;
-      });
-
-      const maxSerial = updated.flatMap(c => c.debtReceipts || []).reduce((max, r) => Math.max(max, r.serialNumber || 0), 0);
-      setCurrentDebtSerial(maxSerial + 1);
-
-      if (activeCustomer?.id === customerId) {
-        const updatedCustomer = updated.find(c => c.id === customerId);
-        if (updatedCustomer) setActiveCustomer(updatedCustomer);
-      }
-
+      const updated = prev.map(c =>
+        c.id === customerId ? { ...c, debtReceipts: newReceipts, balance: total } : c
+      );
       return updated;
     });
 
-    const { error } = await supabase.from('customers').update({
-      balance: total, debt_receipts: newReceipts
-    }).eq('id', customerId);
-    if (error) console.error('Error updating ledger:', error.message);
-  };
+    if (activeCustomer?.id === customerId) {
+      setActiveCustomer(prev => prev ? { ...prev, debtReceipts: newReceipts, balance: total } : prev);
+    }
+
+    const maxSerial = newReceipts.reduce((max, r) => Math.max(max, r.serialNumber || 0), 0);
+    setCurrentDebtSerial(maxSerial + 1);
+
+    if (ledgerSaveTimers.current[customerId]) clearTimeout(ledgerSaveTimers.current[customerId]);
+    ledgerSaveTimers.current[customerId] = setTimeout(async () => {
+      const { error } = await supabase.from('customers').update({
+        balance: total, debt_receipts: newReceipts
+      }).eq('id', customerId);
+      if (error) console.error('Error updating ledger:', error.message);
+    }, 800);
+  }, [activeCustomer]);
 
   const handleLogout = () => {
     localStorage.removeItem('shweni_tawana_user');
@@ -440,10 +445,7 @@ function ReceiptPhoneBanner() {
           0750 497 8758 &nbsp;-&nbsp; 0750 017 2002
         </div>
       </div>
-      {/* دەقی بچووکی گەشەپێدەر لە خوارەوەی ڕاستەقینەی وەسڵەکان */}
-      <div className="text-center mt-2 text-[10px] text-gray-400 font-sans" dir="ltr">
-        Designed and Developed by Eng. Masrur
-      </div>
+      <div className="text-center mt-2 text-[10px] text-gray-400 font-sans" dir="ltr">Designed and Developed by Eng. Masrur</div>
     </div>
   );
 }
@@ -813,18 +815,12 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
       <div className={`rounded-xl border overflow-hidden ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
         <table className="w-full text-right">
           <thead className={isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-600'}>
-            <tr>
-              <th className="p-4 font-bold w-12 text-center">#</th>
-              <th className="p-4 font-bold">ناو</th>
-              <th className="p-4 font-bold">ژمارەی مۆبایل</th>
-              <th className="p-4 font-bold">باڵانس (قەرز)</th>
-              <th className="p-4 font-bold">کردارەکان</th>
-            </tr>
+            <tr><th className="p-4 font-bold w-12 text-center">#</th><th className="p-4 font-bold">ناو</th><th className="p-4 font-bold">ژمارەی مۆبایل</th><th className="p-4 font-bold">باڵانس (قەرز)</th><th className="p-4 font-bold">کردارەکان</th></tr>
           </thead>
           <tbody>
             {filteredCustomers.map((customer: Customer, index: number) => (
               <tr key={customer.id} className={`border-t transition-colors ${isDark ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-100 hover:bg-gray-50'}`}>
-                <td className="p-4 font-bold text-center text-gray-500 w-12">{index + 1}</td>
+                <td className="p-4 font-bold text-center text-gray-400">{index + 1}</td>
                 <td className={`p-4 font-bold cursor-pointer transition-colors hover:${theme.text}`} onClick={() => onOpenLedger(customer)}>{customer.name}</td>
                 <td className="p-4 cursor-pointer text-left" onClick={() => onOpenLedger(customer)}><span dir="ltr" style={{ unicodeBidi: 'plaintext' }}>{customer.phone || '---'}</span></td>
                 <td className={`p-4 font-bold cursor-pointer ${amountColorClass(customer.balance)}`} onClick={() => onOpenLedger(customer)}>{fmtNum(customer.balance)} د.ع</td>
