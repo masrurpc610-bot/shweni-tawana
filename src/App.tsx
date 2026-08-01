@@ -757,16 +757,23 @@ function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
 
 function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOpenLedger }: any) {
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'debt-high' | 'debt-low' | 'name' | 'date-old'>('debt-high');
+  const [sortBy, setSortBy] = useState<'debt-high' | 'debt-low' | 'date-old'>('debt-high');
+  const [selectedLetter, setSelectedLetter] = useState<string>('');
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [formData, setFormData] = useState({ name: '', phone: '', address: '', notes: '' });
   const [errorMsg, setErrorMsg] = useState('');
 
+  const kurdishAlphabet = ['ئ', 'ا', 'ب', 'پ', 'ت', 'ج', 'چ', 'ح', 'خ', 'د', 'ر', 'ڕ', 'ز', 'ژ', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ڤ', 'ق', 'ک', 'گ', 'ل', 'ڵ', 'م', 'ن', 'و', 'ۆ', 'و', 'ھ', 'ه', 'ب', 'ی', 'ێ'];
+  const uniqueLetters = Array.from(new Set(kurdishAlphabet));
+
   const filteredCustomers = customers
-    .filter((c: any) => c.name.includes(search) || c.phone.includes(search))
+    .filter((c: any) => {
+      const matchSearch = c.name.includes(search) || c.phone.includes(search);
+      if (!selectedLetter) return matchSearch;
+      return matchSearch && c.name.trim().startsWith(selectedLetter);
+    })
     .sort((a: Customer, b: Customer) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name, 'ku');
       if (sortBy === 'debt-high') return b.balance - a.balance;
       if (sortBy === 'debt-low') return a.balance - b.balance;
       if (sortBy === 'date-old') return new Date(a.date).getTime() - new Date(b.date).getTime();
@@ -808,9 +815,23 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
         <input type="text" placeholder="گەڕان بەپێی ناو یان مۆبایل..." className={`w-full bg-transparent outline-none font-medium ${isDark ? 'text-white' : 'text-black'}`} value={search} onChange={(e) => setSearch(convertToEnglishDigits(e.target.value))} />
       </div>
 
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className={`text-sm font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>پیتەکان:</span>
+        <button type="button" onClick={() => setSelectedLetter('')}
+          className={`px-3 py-1 rounded-lg text-sm font-bold transition-all border ${!selectedLetter ? `${theme.main} text-white border-transparent` : isDark ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-300 text-gray-700'}`}>
+          هەمووی
+        </button>
+        {uniqueLetters.map((letter) => (
+          <button key={letter} type="button" onClick={() => setSelectedLetter(letter)}
+            className={`w-9 h-9 rounded-lg text-sm font-bold transition-all border flex items-center justify-center ${selectedLetter === letter ? `${theme.main} text-white border-transparent shadow-md` : isDark ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'}`}>
+            {letter}
+          </button>
+        ))}
+      </div>
+
       <div className="mb-6 flex items-center gap-2">
         <span className={`text-sm font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>ریزکردن:</span>
-        {([['debt-high','زۆری قەرزەکان'],['debt-low','کەمی قەرزەکان'],['name','پیتی ناوەکان'],['date-old','کۆنی قەرزەکان']] as [string,string][]).map(([key, label]) => (
+        {([['debt-high','زۆری قەرزەکان'],['debt-low','کەمی قەرزەکان'],['date-old','کۆنی قەرزەکان']] as [string,string][]).map(([key, label]) => (
           <button key={key} type="button" onClick={() => setSortBy(key as any)}
             className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all border ${
               sortBy === key
