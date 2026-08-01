@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import {
   LayoutDashboard, Users, ReceiptText, Building2,
-  Moon, Sun, Search, Trash2, Edit, BookOpen, Plus, X, Printer, FileText, ArrowRight, MinusCircle, LogOut, Lock, User, Hash, Eye, EyeOff
+  Moon, Sun, Search, Trash2, Edit, BookOpen, Plus, X, Printer, FileText, ArrowRight, MinusCircle, LogOut, Lock, User, Hash, Eye, EyeOff, Save
 } from 'lucide-react';
 
 type ReceiptItem = { id: number; name: string; quantity: number | string; unit: string; price: number | string; isNew: boolean; type?: 'item' | 'payment'; note?: string; dateStr?: string; timeStr?: string };
@@ -64,7 +64,7 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [savedReceipts, setSavedReceipts] = useState<SavedReceipt[]>([]);
   const [currentDraftId, setCurrentDraftId] = useState<number>(() => Date.now());
-  const [currentDraftSerial, setCurrentDraftSerial] = useState<number>(1);
+  const [currentDraftSerial, setCurrentDraftSerial] = useState<number>(134);
   const [currentDebtSerial, setCurrentDebtSerial] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -87,23 +87,29 @@ export default function App() {
         customerData.forEach((c: any) => {
           const receipts = c.debt_receipts || [];
           receipts.forEach((r: any) => {
-            if (r.serialNumber && r.serialNumber > maxDebtSerial) maxDebtSerial = r.serialNumber;
+            const sNum = parseNumber(r.serialNumber);
+            if (sNum > maxDebtSerial) maxDebtSerial = sNum;
           });
         });
-        setCurrentDebtSerial(maxDebtSerial + 1);
+        setCurrentDebtSerial(maxDebtSerial > 0 ? maxDebtSerial + 1 : 1);
       }
 
-      const { data: cashData, error: cashError } = await supabase.from('cash_receipts').select('*').order('serial_number', { ascending: false });
+      const { data: cashData, error: cashError } = await supabase.from('cash_receipts').select('*').order('serial_number', { ascending: true });
       if (cashError) {
         console.error('Error fetching cash receipts:', cashError.message);
       } else if (cashData) {
         setSavedReceipts(cashData.map((r: any) => ({
-          id: r.id, serialNumber: r.serial_number || 0, customerName: r.customer_name || '', phone: r.phone || '',
+          id: r.id, serialNumber: Number(r.serial_number) || 0, customerName: r.customer_name || '', phone: r.phone || '',
           date: r.date || new Date().toISOString(), totalAmount: Number(r.total_amount) || 0,
           type: 'cash', items: r.items || []
         })));
-        const maxSerial = cashData.reduce((max: number, r: any) => Math.max(max, r.serial_number || 0), 0);
-        setCurrentDraftSerial(maxSerial + 1);
+        
+        let maxCashSerial = 133;
+        cashData.forEach((r: any) => {
+          const sNum = parseNumber(r.serial_number);
+          if (sNum > maxCashSerial) maxCashSerial = sNum;
+        });
+        setCurrentDraftSerial(maxCashSerial + 1);
       }
     } catch (err) {
       console.error('Database fetch error:', err);
@@ -128,25 +134,27 @@ export default function App() {
     }} />;
   }
 
-  const cashSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleAutoSaveCash = useCallback((receiptData: Omit<SavedReceipt, 'id'>) => {
+  const handleSaveCashReceipt = async (receiptData: Omit<SavedReceipt, 'id'>) => {
     const receiptToSave = { id: currentDraftId, serialNumber: currentDraftSerial, ...receiptData };
+    
     setSavedReceipts(prev => {
       const exists = prev.find(r => r.id === currentDraftId);
       if (exists) return prev.map(r => r.id === currentDraftId ? receiptToSave : r);
       else return [...prev, receiptToSave];
     });
 
-    if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current);
-    cashSaveTimer.current = setTimeout(async () => {
-      const { error } = await supabase.from('cash_receipts').upsert({
-        id: currentDraftId, serial_number: currentDraftSerial, customer_name: receiptData.customerName, phone: receiptData.phone,
-        date: receiptData.date, total_amount: receiptData.totalAmount, items: receiptData.items
-      });
-      if (error) console.error('Error saving cash receipt:', error.message);
-    }, 800);
-  }, [currentDraftId, currentDraftSerial]);
+    const { error } = await supabase.from('cash_receipts').upsert({
+      id: currentDraftId, serial_number: currentDraftSerial, customer_name: receiptData.customerName, phone: receiptData.phone,
+      date: receiptData.date, total_amount: receiptData.totalAmount, items: receiptData.items
+    });
+    
+    if (error) {
+      console.error('Error saving cash receipt:', error.message);
+      alert('کێشەیەک هەیە لە پاشەکەوتکردن!');
+    } else {
+      alert('وەسڵی نەقدی بە سەرکەوتوویی پاشەکەوت کرا!');
+    }
+  };
 
   const startNewCashReceipt = () => {
     setCurrentDraftId(Date.now());
@@ -233,8 +241,12 @@ export default function App() {
       setActiveCustomer(prev => prev ? { ...prev, debtReceipts: newReceipts, balance: total } : prev);
     }
 
-    const maxSerial = newReceipts.reduce((max, r) => Math.max(max, r.serialNumber || 0), 0);
-    setCurrentDebtSerial(maxSerial + 1);
+    let maxSerial = 0;
+    newReceipts.forEach(r => {
+      const sNum = parseNumber(r.serialNumber);
+      if (sNum > maxSerial) maxSerial = sNum;
+    });
+    if (maxSerial > 0) setCurrentDebtSerial(maxSerial + 1);
 
     if (ledgerSaveTimers.current[customerId]) clearTimeout(ledgerSaveTimers.current[customerId]);
     ledgerSaveTimers.current[customerId] = setTimeout(async () => {
@@ -306,7 +318,7 @@ export default function App() {
           {activeTab === 'customers' && <CustomersView isDark={isDarkMode} customers={customers} theme={theme} onAdd={handleAddCustomer} onEdit={handleEditCustomer} onDelete={handleDeleteCustomer} onOpenLedger={(c: Customer) => { setActiveCustomer(c); setActiveTab('customer-ledger'); }} />}
           {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} nextDebtSerial={currentDebtSerial} />}
           {activeTab === 'debt-archive' && <DebtReceiptsArchiveView isDark={isDarkMode} customers={customers} theme={theme} />}
-          {activeTab === 'cash-receipt' && <CashReceiptView isDark={isDarkMode} theme={theme} onAutoSave={handleAutoSaveCash} startNewReceipt={startNewCashReceipt} draftId={currentDraftId} draftSerial={currentDraftSerial} />}
+          {activeTab === 'cash-receipt' && <CashReceiptView isDark={isDarkMode} theme={theme} onSaveReceipt={handleSaveCashReceipt} startNewReceipt={startNewCashReceipt} draftId={currentDraftId} draftSerial={currentDraftSerial} />}
         </main>
       </div>
     </div>
@@ -385,12 +397,10 @@ function ReceiptBrandingHeader({ theme }: { theme: any }) {
   return (
     <div className="mb-3">
       <div className="relative flex items-center overflow-hidden" style={{ minHeight: '88px' }}>
-        {/* Top-right diagonal orange corner accent */}
         <div className="absolute top-0 right-0 z-0" style={{ width: '72px', height: '72px', overflow: 'hidden' }}>
           <div style={{ width: 0, height: 0, borderStyle: 'solid', borderWidth: '0 72px 72px 0', borderColor: 'transparent #e05a2b transparent transparent' }} />
         </div>
 
-        {/* Left: Logo & brand column */}
         <div className="relative z-10 flex-shrink-0 flex flex-col items-center justify-center border-l-2 border-gray-300" style={{ width: '128px', padding: '0 10px' }}>
           <div className="rounded-full flex items-center justify-center border-[3px] border-blue-800 mb-1" style={{ width: '48px', height: '48px', background: 'linear-gradient(135deg,#1e3a8a,#2563eb)' }}>
             <span className="text-white font-black select-none" style={{ fontSize: '15px' }}>TW</span>
@@ -399,7 +409,6 @@ function ReceiptBrandingHeader({ theme }: { theme: any }) {
           <p className="text-blue-800 font-bold text-center leading-tight" style={{ fontSize: '7px' }}>Material &amp; Construction<br />FOR TOOLS</p>
         </div>
 
-        {/* Right: Company name & address */}
         <div className="relative z-10 flex-1 flex flex-col justify-center text-right" style={{ paddingRight: '8px', paddingLeft: '4px', paddingTop: '4px' }}>
           <h1 className="font-black leading-none" style={{ fontSize: '58px', fontFamily: 'serif', color: '#1e3a8a' }}>توانا</h1>
           <p className="font-bold text-gray-800" style={{ fontSize: '12px', marginTop: '3px' }}>بۆ بازرگانی گشتی کەل و پەلی دەستی و کەرەستەی بیناسازی</p>
@@ -407,7 +416,6 @@ function ReceiptBrandingHeader({ theme }: { theme: any }) {
         </div>
       </div>
 
-      {/* Orange gradient divider */}
       <div style={{ height: '3px', background: 'linear-gradient(to left,#c0392b,#e05a2b,#f0873d)', marginTop: '5px', marginBottom: '4px' }} />
     </div>
   );
@@ -456,7 +464,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
   const [selectedReceipt, setSelectedReceipt] = useState<SavedReceipt | null>(null);
   const [receiptSearch, setReceiptSearch] = useState('');
   const [editingReceipt, setEditingReceipt] = useState<SavedReceipt | null>(null);
-  const [hideBalance, setHideBalance] = useState(false);
+  const [hideBalance, setHideBalance] = useState(true);
   const displayAmount = (n: number | string) => hideBalance ? '***' : fmtNum(n);
 
   const filterByTime = (dateString: string) => {
@@ -1136,7 +1144,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack, nextDebtSer
   );
 }
 
-function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId, draftSerial }: any) {
+function CashReceiptView({ theme, onSaveReceipt, startNewReceipt, draftId, draftSerial }: any) {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [items, setItems] = useState<ReceiptItem[]>(() => [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr: new Date().toLocaleDateString('en-GB'), timeStr: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }]);
@@ -1152,10 +1160,6 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId, draftSer
   const totalTablePayments = items.filter(i => i.type === 'payment').reduce((sum, i) => sum + parseNumber(i.price), 0);
   const effectivePaid = parseNumber(amountPaid) > 0 ? parseNumber(amountPaid) : totalTablePayments;
   const remainingBalance = Math.max(0, totalItemsCost - effectivePaid);
-
-  useEffect(() => {
-    onAutoSave({ customerName: customerName || 'کڕیاری نەناسراو', phone: customerPhone, date: new Date().toISOString(), totalAmount: totalItemsCost, type: 'cash', items });
-  }, [customerName, customerPhone, items, totalItemsCost]);
 
   useEffect(() => {
     setCustomerName(''); setCustomerPhone(''); setAmountPaid('');
@@ -1191,6 +1195,21 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId, draftSer
     } else setItems(filtered);
   };
 
+  const handleSaveClick = () => {
+    onSaveReceipt({
+      customerName: customerName || 'کڕیاری نەناسراو',
+      phone: customerPhone,
+      date: new Date().toISOString(),
+      totalAmount: totalItemsCost,
+      type: 'cash',
+      items
+    });
+  };
+
+  const handlePrintClick = () => {
+    window.print();
+  };
+
   const ITEMS_PER_PAGE = 15;
   const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE) || 1;
   const pagesArray = [];
@@ -1206,10 +1225,11 @@ function CashReceiptView({ theme, onAutoSave, startNewReceipt, draftId, draftSer
           <h2 className={`text-2xl font-bold ${theme.text}`}>دروستکردنی وەسڵی نەقدی</h2>
           <span className="text-sm font-black bg-gray-200 text-gray-700 px-3 py-1 rounded-lg">ژمارەی وەسڵ: #{draftSerial}</span>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-3">
           <button type="button" onClick={startNewReceipt} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus size={20} /> وەسڵی نوێ</button>
           <button type="button" onClick={addPayment} className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-bold flex items-center gap-1 text-sm"><MinusCircle size={16} /> پارەدان</button>
-          <button type="button" onClick={() => window.print()} className={`${theme.main} ${theme.hover} text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2`}><Printer size={20} /> چاپکردن / PDF</button>
+          <button type="button" onClick={handleSaveClick} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Save size={18} /> پاشەکەوتکردن</button>
+          <button type="button" onClick={handlePrintClick} className={`${theme.main} ${theme.hover} text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2`}><Printer size={20} /> چاپکردن</button>
         </div>
       </div>
 
