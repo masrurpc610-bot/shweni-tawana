@@ -73,6 +73,7 @@ export default function App() {
   const [savedReceipts, setSavedReceipts] = useState<SavedReceipt[]>([]);
   const [currentDraftId, setCurrentDraftId] = useState<number>(() => Date.now());
   const [currentDraftSerial, setCurrentDraftSerial] = useState<number>(134);
+  const [currentDebtSerial, setCurrentDebtSerial] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(false);
 
   const fetchDataFromSupabase = async () => {
@@ -87,15 +88,16 @@ export default function App() {
       if (custError) {
         console.error('Error fetching customers:', custError.message);
       } else if (customerData) {
+        let globalCounter = 1;
         const mappedCustomers = customerData.map((c: any) => {
           const rawReceipts = c.debt_receipts || [];
           const activeReceipts = rawReceipts.filter((r: any) => {
             if (!r.deleted_at) return true;
             return new Date(r.deleted_at) > oneMonthAgo;
           });
-          const indexedReceipts = activeReceipts.map((r: any, idx: number) => ({
+          const indexedReceipts = activeReceipts.map((r: any) => ({
             ...r,
-            serialNumber: idx + 1
+            serialNumber: r.serialNumber && parseNumber(r.serialNumber) > 0 ? parseNumber(r.serialNumber) : globalCounter++
           }));
 
           return {
@@ -106,6 +108,7 @@ export default function App() {
         });
 
         setCustomers(mappedCustomers);
+        setCurrentDebtSerial(globalCounter);
       }
 
       const { data: cashData, error: cashError } = await supabase.from('cash_receipts').select('*').order('serial_number', { ascending: true });
@@ -181,11 +184,14 @@ export default function App() {
   };
 
   const handleAddCustomer = async (newCustomer: Customer) => {
-    const receiptsWithSerial = (newCustomer.debtReceipts || []).map((r, i) => ({
+    const serialToUse = currentDebtSerial;
+    const receiptsWithSerial = (newCustomer.debtReceipts || []).map((r) => ({
       ...r,
-      serialNumber: 1,
+      serialNumber: serialToUse,
       deleted_at: null
     }));
+    setCurrentDebtSerial(prev => prev + 1);
+
     const updatedCustomer = { ...newCustomer, debtReceipts: receiptsWithSerial };
     setCustomers(prev => [...prev, updatedCustomer]);
     const { error } = await supabase.from('customers').insert({
@@ -246,13 +252,8 @@ export default function App() {
   const ledgerSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   const handleUpdateCustomerLedger = useCallback((customerId: number, newReceipts: CustomerReceipt[]) => {
-    const indexedReceipts = newReceipts.map((r, idx) => ({
-      ...r,
-      serialNumber: idx + 1
-    }));
-
     let total = 0;
-    indexedReceipts.forEach(r => {
+    newReceipts.forEach(r => {
       if (!r.deleted_at) {
         r.items.forEach(i => {
           const price = parseNumber(i.price);
@@ -264,23 +265,32 @@ export default function App() {
 
     setCustomers(prev => {
       const updated = prev.map(c =>
-        c.id === customerId ? { ...c, debtReceipts: indexedReceipts, balance: total } : c
+        c.id === customerId ? { ...c, debtReceipts: newReceipts, balance: total } : c
       );
       return updated;
     });
 
     if (activeCustomer?.id === customerId) {
-      setActiveCustomer(prev => prev ? { ...prev, debtReceipts: indexedReceipts, balance: total } : prev);
+      setActiveCustomer(prev => prev ? { ...prev, debtReceipts: newReceipts, balance: total } : prev);
+    }
+
+    let maxSerial = 0;
+    newReceipts.forEach(r => {
+      const sNum = parseNumber(r.serialNumber);
+      if (sNum > maxSerial) maxSerial = sNum;
+    });
+    if (maxSerial >= currentDebtSerial) {
+      setCurrentDebtSerial(maxSerial + 1);
     }
 
     if (ledgerSaveTimers.current[customerId]) clearTimeout(ledgerSaveTimers.current[customerId]);
     ledgerSaveTimers.current[customerId] = setTimeout(async () => {
       const { error } = await supabase.from('customers').update({
-        balance: total, debt_receipts: indexedReceipts
+        balance: total, debt_receipts: newReceipts
       }).eq('id', customerId);
       if (error) console.error('Error updating ledger:', error.message);
     }, 800);
-  }, [activeCustomer]);
+  }, [activeCustomer, currentDebtSerial]);
 
   const handleLogout = () => {
     localStorage.removeItem('shweni_tawana_user');
@@ -342,7 +352,7 @@ export default function App() {
         <main id="main-content" className={`flex-1 overflow-y-auto p-8 transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
           {activeTab === 'dashboard' && <DashboardView isDark={isDarkMode} timeFilter={timeFilter} setTimeFilter={setTimeFilter} customers={customers} savedReceipts={savedReceipts} onDeleteReceipt={handleDeleteSavedReceipt} onEditReceipt={handleEditSavedReceipt} theme={theme} onViewDebtArchive={() => setActiveTab('debt-archive')} />}
           {activeTab === 'customers' && <CustomersView isDark={isDarkMode} customers={customers} theme={theme} onAdd={handleAddCustomer} onEdit={handleEditCustomer} onDelete={handleDeleteCustomer} onOpenLedger={(c: Customer) => { setActiveCustomer(c); setActiveTab('customer-ledger'); }} />}
-          {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} />}
+          {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} nextDebtSerial={currentDebtSerial} setGlobalSerial={(s: number) => setCurrentDebtSerial(s)} />}
           {activeTab === 'debt-archive' && <DebtReceiptsArchiveView isDark={isDarkMode} customers={customers} theme={theme} />}
           {activeTab === 'cash-receipt' && <CashReceiptView isDark={isDarkMode} theme={theme} onSaveReceipt={handleSaveCashReceipt} startNewReceipt={startNewCashReceipt} draftId={currentDraftId} draftSerial={currentDraftSerial} />}
           {activeTab === 'recycle-bin' && <RecycleBinView isDark={isDarkMode} customers={customers} savedReceipts={savedReceipts} theme={theme} onRestoreCash={handleRestoreSavedReceipt} onRestoreDebt={handleUpdateCustomerLedger} />}
@@ -480,7 +490,7 @@ function ReceiptPhoneBanner() {
           0750 497 8758 &nbsp;-&nbsp; 0750 017 2002
         </div>
       </div>
-      <div className="text-center mt-2 text-[10px] text-gray-400 font-sans" dir="ltr">Designed and Developed by Eng. Masrur</div>
+      <div className="text-center mt-2 text-[10px] text-gray-400 font-sans" dir="ltr">Designed and Developed by Eng. Masrour</div>
     </div>
   );
 }
@@ -522,7 +532,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
     c.debtReceipts.forEach(r => {
       if (!r.deleted_at && r.items && r.items.length > 0 && r.items.some(i => i.name || i.price || i.quantity)) {
         if (filterByDate(r.date)) {
-          filteredDebtReceipts.push(r);
+          filteredDebtReceipts.push({ ...r, customerName: c.name, phone: c.phone, customerBalance: c.balance });
         }
       }
     });
@@ -1733,7 +1743,7 @@ function DebtReceiptsArchiveView({ isDark, customers, theme }: any) {
                 </div>
                 <div className="text-left">
                   <p className={`font-black text-xl ${amountColorClass(receipt.receiptTotal)}`}>{fmtNum(receipt.receiptTotal)} د.ع</p>
-                  <p className={`text-xs font-bold ${amountColorClass(customer.balance)}`}>باڵانس: {fmtNum(receipt.customerBalance)} د.ع</p>
+                  <p className={`text-xs font-bold ${amountColorClass(receipt.customerBalance)}`}>باڵانس: {fmtNum(receipt.customerBalance)} د.ع</p>
                 </div>
               </div>
             ))}
@@ -1763,12 +1773,12 @@ function SidebarItem({ icon, label, isActive, onClick, isDark, theme }: any) {
 
 function DashboardCard({ title, amount, suffix, icon: Icon, isDark }: any) {
   return (
-    <div className={`p-6 rounded-xl border flex flex-col items-center justify-center gap-4 transition-all ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
+    <p className={`p-6 rounded-xl border flex flex-col items-center justify-center gap-4 transition-all ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
       <div className={isDark ? 'bg-gray-700 p-3 rounded-2xl' : 'bg-gray-50 p-3 rounded-2xl'}><Icon size={24} /></div>
       <div className="text-center">
         <div className="text-2xl font-black flex items-center justify-center gap-1"><span>{amount}</span>{suffix && <span className="text-sm font-bold text-gray-400">{suffix}</span>}</div>
         <div className={`text-sm mt-1 font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{title}</div>
       </div>
-    </div>
+    </p>
   );
 }
