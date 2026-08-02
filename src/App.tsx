@@ -89,17 +89,19 @@ export default function App() {
       } else if (customerData) {
         const mappedCustomers = customerData.map((c: any) => {
           const rawReceipts = c.debt_receipts || [];
-          const receipts = rawReceipts.map((r: any, idx: number) => ({
+          const activeReceipts = rawReceipts.filter((r: any) => {
+            if (!r.deleted_at) return true;
+            return new Date(r.deleted_at) > oneMonthAgo;
+          });
+          const indexedReceipts = activeReceipts.map((r: any, idx: number) => ({
             ...r,
             serialNumber: idx + 1
           }));
+
           return {
             id: c.id, name: c.name || '', phone: c.phone || '', address: c.address || '',
             notes: c.notes || '', balance: Number(c.balance) || 0, date: c.date || new Date().toISOString(),
-            debtReceipts: receipts.filter((r: any) => {
-              if (!r.deleted_at) return true;
-              return new Date(r.deleted_at) > oneMonthAgo;
-            })
+            debtReceipts: indexedReceipts
           };
         });
 
@@ -120,7 +122,7 @@ export default function App() {
           date: r.date || new Date().toISOString(), totalAmount: Number(r.total_amount) || 0,
           type: 'cash', items: r.items || [], deleted_at: r.deleted_at
         })));
-
+        
         let maxCashSerial = 133;
         cashData.forEach((r: any) => {
           const sNum = parseNumber(r.serial_number);
@@ -153,7 +155,7 @@ export default function App() {
 
   const handleSaveCashReceipt = async (receiptData: Omit<SavedReceipt, 'id'>) => {
     const receiptToSave = { id: currentDraftId, serialNumber: currentDraftSerial, ...receiptData, deleted_at: null };
-
+    
     setSavedReceipts(prev => {
       const exists = prev.find(r => r.id === currentDraftId);
       if (exists) return prev.map(r => r.id === currentDraftId ? receiptToSave : r);
@@ -164,7 +166,7 @@ export default function App() {
       id: currentDraftId, serial_number: currentDraftSerial, customer_name: receiptData.customerName, phone: receiptData.phone,
       date: receiptData.date, total_amount: receiptData.totalAmount, items: receiptData.items, deleted_at: null
     });
-
+    
     if (error) {
       console.error('Error saving cash receipt:', error.message);
       alert('کێشەیەک هەیە لە پاشەکەوتکردن!');
@@ -179,11 +181,12 @@ export default function App() {
   };
 
   const handleAddCustomer = async (newCustomer: Customer) => {
-    const updatedReceipts = newCustomer.debtReceipts.map((r, i) => ({
+    const receiptsWithSerial = (newCustomer.debtReceipts || []).map((r, i) => ({
       ...r,
-      serialNumber: i + 1
+      serialNumber: 1,
+      deleted_at: null
     }));
-    const updatedCustomer = { ...newCustomer, debtReceipts: updatedReceipts };
+    const updatedCustomer = { ...newCustomer, debtReceipts: receiptsWithSerial };
     setCustomers(prev => [...prev, updatedCustomer]);
     const { error } = await supabase.from('customers').insert({
       id: updatedCustomer.id,
@@ -243,8 +246,13 @@ export default function App() {
   const ledgerSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   const handleUpdateCustomerLedger = useCallback((customerId: number, newReceipts: CustomerReceipt[]) => {
+    const indexedReceipts = newReceipts.map((r, idx) => ({
+      ...r,
+      serialNumber: idx + 1
+    }));
+
     let total = 0;
-    newReceipts.forEach(r => {
+    indexedReceipts.forEach(r => {
       if (!r.deleted_at) {
         r.items.forEach(i => {
           const price = parseNumber(i.price);
@@ -256,19 +264,19 @@ export default function App() {
 
     setCustomers(prev => {
       const updated = prev.map(c =>
-        c.id === customerId ? { ...c, debtReceipts: newReceipts, balance: total } : c
+        c.id === customerId ? { ...c, debtReceipts: indexedReceipts, balance: total } : c
       );
       return updated;
     });
 
     if (activeCustomer?.id === customerId) {
-      setActiveCustomer(prev => prev ? { ...prev, debtReceipts: newReceipts, balance: total } : prev);
+      setActiveCustomer(prev => prev ? { ...prev, debtReceipts: indexedReceipts, balance: total } : prev);
     }
 
     if (ledgerSaveTimers.current[customerId]) clearTimeout(ledgerSaveTimers.current[customerId]);
     ledgerSaveTimers.current[customerId] = setTimeout(async () => {
       const { error } = await supabase.from('customers').update({
-        balance: total, debt_receipts: newReceipts
+        balance: total, debt_receipts: indexedReceipts
       }).eq('id', customerId);
       if (error) console.error('Error updating ledger:', error.message);
     }, 800);
@@ -411,6 +419,7 @@ function LoginScreen({ theme, isDark, setIsDark, onLogin }: any) {
     </div>
   );
 }
+
 function ReceiptBrandingHeader({ theme }: { theme: any }) {
   return (
     <div className="mb-3">
@@ -438,6 +447,7 @@ function ReceiptBrandingHeader({ theme }: { theme: any }) {
     </div>
   );
 }
+
 function ReceiptSummaryBox({ children }: { children: React.ReactNode }) {
   return (
     <div className="receipt-summary-box border-[3px] border-black p-4 bg-gray-50">
@@ -445,6 +455,7 @@ function ReceiptSummaryBox({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
 function SignatureSection() {
   return (
     <div className="flex gap-12 items-center font-bold">
@@ -459,6 +470,7 @@ function SignatureSection() {
     </div>
   );
 }
+
 function ReceiptPhoneBanner() {
   return (
     <div>
@@ -472,6 +484,7 @@ function ReceiptPhoneBanner() {
     </div>
   );
 }
+
 function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedReceipts, onDeleteReceipt, onEditReceipt, theme, onViewDebtArchive }: any) {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
@@ -486,9 +499,13 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
     if (timeFilter === 'هەموو کات') return true;
     const targetDate = new Date(dateStr);
     const today = new Date();
+    
     if (timeFilter === 'ئەمڕۆ') {
-      return targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() === today.getMonth() && targetDate.getDate() === today.getDate();
+      return targetDate.getFullYear() === today.getFullYear() &&
+             targetDate.getMonth() === today.getMonth() &&
+             targetDate.getDate() === today.getDate();
     }
+    
     const diffDays = Math.ceil(Math.abs(today.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
     if (timeFilter === 'ئەم هەفتەیە') return diffDays <= 7;
     if (timeFilter === 'ئەم مانگە') return diffDays <= 30;
@@ -504,7 +521,9 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
   customers.forEach((c: Customer) => {
     c.debtReceipts.forEach(r => {
       if (!r.deleted_at && r.items && r.items.length > 0 && r.items.some(i => i.name || i.price || i.quantity)) {
-        if (filterByDate(r.date)) filteredDebtReceipts.push(r);
+        if (filterByDate(r.date)) {
+          filteredDebtReceipts.push(r);
+        }
       }
     });
   });
@@ -515,9 +534,17 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
       if (!r.deleted_at) {
         r.items.forEach(i => {
           if (i.type === 'payment') {
-            const itemDate = i.dateStr ? (() => { const parts = i.dateStr.split('/'); if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`; return r.date; })() : r.date;
+            const itemDate = i.dateStr ? (() => {
+              const parts = i.dateStr.split('/');
+              if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+              return r.date;
+            })() : r.date;
+
             if (filterByDate(itemDate)) {
-              allPayments.push({ customerName: c.name, phone: c.phone, amount: parseNumber(i.price), receiver: i.note, date: r.date, dateStr: i.dateStr, timeStr: i.timeStr });
+              allPayments.push({
+                customerName: c.name, phone: c.phone, amount: parseNumber(i.price),
+                receiver: i.note, date: r.date, dateStr: i.dateStr, timeStr: i.timeStr
+              });
             }
           }
         });
@@ -526,11 +553,14 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
   });
 
   const totalPaymentsCollected = allPayments.reduce((sum, p) => sum + p.amount, 0);
+
   const searchedReceipts = filteredReceipts.filter((r: any) => {
     const q = receiptSearch.trim();
     if (!q) return true;
     const serialStr = r.serialNumber ? String(r.serialNumber) : '';
-    return (r.customerName && r.customerName.includes(q)) || (r.phone && r.phone.includes(q)) || (serialStr && serialStr.includes(q));
+    return (r.customerName && r.customerName.includes(q)) ||
+           (r.phone && r.phone.includes(q)) ||
+           (serialStr && serialStr.includes(q));
   });
 
   const totalDebt = filteredCustomers.reduce((sum: number, c: any) => sum + c.balance, 0);
@@ -541,7 +571,9 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
       <div className="mb-8 flex justify-between items-center print-hide">
         <div><h2 className="text-3xl font-bold mb-2">داشبۆرد</h2><p className={isDark ? 'text-gray-400' : 'text-gray-500'}>پوختەیەکی گشتی بەپێی کاتی دیاریکراو</p></div>
         <div className="flex items-center gap-3">
-          <button type="button" onClick={() => setHideBalance(!hideBalance)} className={`p-2.5 rounded-lg border transition-all ${isDark ? 'bg-gray-800 border-gray-600 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'} ${hideBalance ? 'text-amber-500' : isDark ? 'text-gray-400' : 'text-gray-500'}`} title={hideBalance ? 'پیشاندانی ژمارەکان' : 'شاردنەوەی ژمارەکان'}>
+          <button type="button" onClick={() => setHideBalance(!hideBalance)}
+            className={`p-2.5 rounded-lg border transition-all ${isDark ? 'bg-gray-800 border-gray-600 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'} ${hideBalance ? 'text-amber-500' : isDark ? 'text-gray-400' : 'text-gray-500'}`}
+            title={hideBalance ? 'پیشاندانی ژمارەکان' : 'شاردنەوەی ژمارەکان'}>
             {hideBalance ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
           <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className={`px-4 py-2 rounded-lg font-bold outline-none cursor-pointer ${isDark ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-200 border shadow-sm'}`}>
@@ -552,6 +584,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 print-hide">
         <DashboardCard title="کۆی قەرزەکانمان" amount={displayAmount(totalDebt)} suffix="د.ع" icon={ReceiptText} isDark={isDark} />
+
         <div onClick={() => setShowPaymentsModal(true)} className={`cursor-pointer hover:scale-105 transform transition-all duration-200 p-6 rounded-xl border flex flex-col items-center justify-center gap-4 ${isDark ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
           <div className={isDark ? 'bg-gray-700 p-3 rounded-2xl' : 'bg-gray-50 p-3 rounded-2xl'}><BookOpen className="text-blue-500" size={24} /></div>
           <div className="text-center">
@@ -559,6 +592,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
             <div className={`text-sm mt-1 font-bold flex items-center justify-center gap-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>قەرزی وەرگیراوە (واصڵ) <FileText size={14} /></div>
           </div>
         </div>
+
         <div onClick={() => setShowReceiptModal(true)} className={`cursor-pointer hover:scale-105 transform transition-all duration-200 p-6 rounded-xl border flex flex-col items-center justify-center gap-4 ${isDark ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
           <div className={isDark ? 'bg-gray-700 p-3 rounded-2xl' : 'bg-gray-50 p-3 rounded-2xl'}><Building2 className={theme.text} size={24} /></div>
           <div className="text-center">
@@ -566,7 +600,9 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
             <div className={`text-sm mt-1 font-bold flex items-center justify-center gap-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>فرۆشتنی نەقدی <FileText size={14} /></div>
           </div>
         </div>
+
         <DashboardCard title="کۆی کڕیارەکان" amount={filteredCustomers.length} suffix="کەس" icon={Users} isDark={isDark} />
+
         <div onClick={onViewDebtArchive} className={`cursor-pointer hover:scale-105 transform transition-all duration-200 p-6 rounded-xl border flex flex-col items-center justify-center gap-4 ${isDark ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
           <div className={isDark ? 'bg-gray-700 p-3 rounded-2xl' : 'bg-gray-50 p-3 rounded-2xl'}><FileText className="text-red-500" size={24} /></div>
           <div className="text-center">
@@ -591,7 +627,9 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
                     <p className="text-sm text-gray-500">وەرگر: <span className="font-bold text-blue-700">{p.receiver}</span> - مۆبایل: <span dir="ltr">{p.phone}</span></p>
                     <p className="text-xs text-gray-400 mt-1">{p.dateStr || new Date(p.date).toLocaleDateString('en-IQ')} ({p.timeStr || '---'})</p>
                   </div>
-                  <div className="text-left"><p className="font-black text-2xl text-green-600" dir="ltr">- {fmtNum(p.amount)} د.ع</p></div>
+                  <div className="text-left">
+                    <p className="font-black text-2xl text-green-600" dir="ltr">- {fmtNum(p.amount)} د.ع</p>
+                  </div>
                 </div>
               ))}
               {allPayments.length === 0 && <p className="text-center p-10 text-gray-500">هیچ پارەیەک واصڵ نەکراوە لەم کاتەدا.</p>}
@@ -625,7 +663,9 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
                         <p className="text-sm text-gray-500">{new Date(receipt.date).toLocaleDateString('en-IQ')} - <span dir="ltr">{receipt.phone}</span></p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="text-left cursor-pointer" onClick={() => setSelectedReceipt(receipt)}><p className={`font-black text-xl ${theme.text}`}>{fmtNum(receipt.totalAmount)} د.ع</p></div>
+                        <div className="text-left cursor-pointer" onClick={() => setSelectedReceipt(receipt)}>
+                          <p className={`font-black text-xl ${theme.text}`}>{fmtNum(receipt.totalAmount)} د.ع</p>
+                        </div>
                         <button type="button" onClick={() => setSelectedReceipt(receipt)} className="text-emerald-600 hover:text-emerald-700 p-2 rounded-lg hover:bg-emerald-50 transition-colors" title="چاپکردن / ریپرینت"><Printer size={20} /></button>
                         <button type="button" onClick={() => setEditingReceipt(receipt)} className="text-blue-500 hover:text-blue-700 p-2 rounded-lg hover:bg-blue-50 transition-colors" title="دەستکاری کردن"><Edit size={20} /></button>
                         <button type="button" onClick={() => onDeleteReceipt(receipt.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors" title="ناردن بۆ ریسایکل بین"><Trash2 size={20} /></button>
@@ -651,12 +691,17 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
 
       {editingReceipt && (
         <EditReceiptModal receipt={editingReceipt} isDark={isDark} theme={theme} onClose={() => setEditingReceipt(null)}
-          onSave={(updated: SavedReceipt) => { onEditReceipt(updated); setEditingReceipt(null); if (selectedReceipt?.id === updated.id) setSelectedReceipt(updated); }}
+          onSave={(updated: SavedReceipt) => {
+            onEditReceipt(updated);
+            setEditingReceipt(null);
+            if (selectedReceipt?.id === updated.id) setSelectedReceipt(updated);
+          }}
         />
       )}
     </div>
   );
 }
+
 function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
   const [customerName, setCustomerName] = useState(receipt.customerName);
   const [phone, setPhone] = useState(receipt.phone);
@@ -717,7 +762,12 @@ function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
             <table className="w-full border-collapse border border-gray-400 text-center text-sm">
               <thead>
                 <tr className="bg-gray-200 text-black">
-                  <th className="border p-2">ناو</th><th className="border p-2 w-16">بڕ</th><th className="border p-2 w-20">یەکە</th><th className="border p-2 w-24">نرخ</th><th className="border p-2 w-28">کۆی گشتی</th><th className="border p-2 w-10">❌</th>
+                  <th className="border p-2">ناو</th>
+                  <th className="border p-2 w-16">بڕ</th>
+                  <th className="border p-2 w-20">یەکە</th>
+                  <th className="border p-2 w-24">نرخ</th>
+                  <th className="border p-2 w-28">کۆی گشتی</th>
+                  <th className="border p-2 w-10">❌</th>
                 </tr>
               </thead>
               <tbody>
@@ -729,7 +779,11 @@ function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
                     <tr key={item.id}>
                       <td className="border p-1"><input type="text" value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} className="w-full p-1 bg-transparent outline-none font-bold text-right" /></td>
                       <td className="border p-1"><input type="text" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', e.target.value)} className="w-full p-1 bg-transparent outline-none font-bold text-center" /></td>
-                      <td className="border p-1"><select value={item.unit} onChange={e => updateItem(item.id, 'unit', e.target.value)} className="w-full bg-transparent outline-none text-center"><option>دانە</option><option>مەتر</option><option>کیلۆ</option><option>کارتۆن</option><option>دەرزەن</option><option>قوتوو</option></select></td>
+                      <td className="border p-1">
+                        <select value={item.unit} onChange={e => updateItem(item.id, 'unit', e.target.value)} className="w-full bg-transparent outline-none text-center">
+                          <option>دانە</option><option>مەتر</option><option>کیلۆ</option><option>کارتۆن</option><option>دەرزەن</option><option>قوتوو</option>
+                        </select>
+                      </td>
                       <td className="border p-1"><input type="text" value={item.price} onChange={e => updateItem(item.id, 'price', e.target.value)} className="w-full p-1 bg-transparent outline-none font-bold text-center" /></td>
                       <td className="border p-1 font-black" dir="ltr">{fmtNum(lineTotal)}</td>
                       <td className="border p-1"><button type="button" onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button></td>
@@ -749,6 +803,7 @@ function EditReceiptModal({ receipt, isDark, theme, onClose, onSave }: any) {
     </div>
   );
 }
+
 function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOpenLedger }: any) {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'debt-high' | 'debt-low' | 'date-old'>('debt-high');
@@ -791,7 +846,7 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
       onAdd({
         id: Date.now(), name: formData.name, phone: cleanedPhone, address: formData.address, notes: formData.notes,
         balance: 0, date: new Date().toISOString(),
-        debtReceipts: [{ id: Date.now(), serialNumber: 1, date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] }]
+        debtReceipts: [{ id: Date.now(), date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] }]
       });
     }
     setShowModal(false);
@@ -811,16 +866,27 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <span className={`text-sm font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>پیتەکان:</span>
-        <button type="button" onClick={() => setSelectedLetter('')} className={`px-3 py-1 rounded-lg text-sm font-bold transition-all border ${!selectedLetter ? `${theme.main} text-white border-transparent` : isDark ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-300 text-gray-700'}`}>هەمووی</button>
+        <button type="button" onClick={() => setSelectedLetter('')}
+          className={`px-3 py-1 rounded-lg text-sm font-bold transition-all border ${!selectedLetter ? `${theme.main} text-white border-transparent` : isDark ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-300 text-gray-700'}`}>
+          هەمووی
+        </button>
         {uniqueLetters.map((letter) => (
-          <button key={letter} type="button" onClick={() => setSelectedLetter(letter)} className={`w-9 h-9 rounded-lg text-sm font-bold transition-all border flex items-center justify-center ${selectedLetter === letter ? `${theme.main} text-white border-transparent shadow-md` : isDark ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'}`}>{letter}</button>
+          <button key={letter} type="button" onClick={() => setSelectedLetter(letter)}
+            className={`w-9 h-9 rounded-lg text-sm font-bold transition-all border flex items-center justify-center ${selectedLetter === letter ? `${theme.main} text-white border-transparent shadow-md` : isDark ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'}`}>
+            {letter}
+          </button>
         ))}
       </div>
 
       <div className="mb-6 flex items-center gap-2">
         <span className={`text-sm font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>ریزکردن:</span>
         {([['debt-high','زۆری قەرزەکان'],['debt-low','کەمی قەرزەکان'],['date-old','کۆنی قەرزەکان']] as [string,string][]).map(([key, label]) => (
-          <button key={key} type="button" onClick={() => setSortBy(key as any)} className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all border ${sortBy === key ? `${theme.main} text-white border-transparent shadow-sm` : isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>{label}</button>
+          <button key={key} type="button" onClick={() => setSortBy(key as any)}
+            className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all border ${
+              sortBy === key
+                ? `${theme.main} text-white border-transparent shadow-sm`
+                : isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-100'
+            }`}>{label}</button>
         ))}
       </div>
 
@@ -882,19 +948,18 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
     </div>
   );
 }
+
 function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
   const [receipts, setReceipts] = useState<CustomerReceipt[]>(() => {
     if (customer.debtReceipts?.length > 0) {
-      const mapped = customer.debtReceipts.map((r: CustomerReceipt, idx: number) => {
-        const sNum = idx + 1;
+      return customer.debtReceipts.map((r: CustomerReceipt, idx: number) => {
         if (r.items.length === 0) {
           const dateStr = new Date().toLocaleDateString('en-GB');
           const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-          return { ...r, serialNumber: sNum, items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] };
+          return { ...r, serialNumber: idx + 1, items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] };
         }
-        return { ...r, serialNumber: sNum };
+        return { ...r, serialNumber: idx + 1 };
       });
-      return mapped;
     } else {
       const dateStr = new Date().toLocaleDateString('en-GB');
       const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -907,7 +972,9 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
   }, [receipts]);
 
   const addNewReceiptBlock = () => {
-    const nextSerial = receipts.length + 1;
+    const activeLen = receipts.filter(r => !r.deleted_at).length;
+    const nextSerial = activeLen + 1;
+
     const dateStr = new Date().toLocaleDateString('en-GB');
     const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     setReceipts([...receipts, { id: Date.now(), serialNumber: nextSerial, date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }], deleted_at: null }]);
@@ -916,7 +983,8 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
   const deleteReceiptBlock = (id: number) => {
     if (window.confirm('دڵنیایت لەناردنی ئەم وەسڵە بۆ ریسایکل بین؟')) {
       const nowIso = new Date().toISOString();
-      setReceipts(receipts.map(r => r.id === id ? { ...r, deleted_at: nowIso } : r));
+      const updated = receipts.map(r => r.id === id ? { ...r, deleted_at: nowIso } : r);
+      setReceipts(updated);
     }
   };
 
@@ -974,7 +1042,8 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
         </div>
       </div>
 
-      {activeReceipts.map((receipt, receiptIdx) => {
+      {activeReceipts.map((receipt, index) => {
+        const displaySerial = index + 1;
         const prevDebt = runningTotalDebt;
         let totalItemsCost = 0;
         let totalPaymentsMade = 0;
@@ -1002,7 +1071,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
           <div key={receipt.id} className="mb-12">
             <div className="max-w-[210mm] mx-auto flex justify-between items-center bg-gray-300 dark:bg-gray-700 p-3 rounded-t-lg border border-b-0 border-gray-400 print-hide">
               <div className="flex items-center gap-3">
-                {receipt.serialNumber && <span className="text-sm font-black bg-gray-200 text-gray-700 px-2 py-1 rounded">#{receipt.serialNumber}</span>}
+                <span className="text-sm font-black bg-gray-200 text-gray-700 px-2 py-1 rounded">#{displaySerial}</span>
                 <span className="font-bold dark:text-white">بەرواری وەسڵ:</span>
                 <input type="date" value={receipt.date ? receipt.date.split('T')[0] : ''} onChange={(e) => updateReceiptDate(receipt.id, new Date(e.target.value).toISOString())} className="p-1 rounded font-bold outline-none text-black" />
               </div>
@@ -1026,7 +1095,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
                       </div>
                       <div className="text-left flex flex-col gap-1">
                         <p>بەروار: {receipt.date ? new Date(receipt.date).toLocaleDateString('en-IQ') : ''}</p>
-                        {receipt.serialNumber && <p>ژمارەی وەسڵ: <span className="font-black">#{receipt.serialNumber}</span></p>}
+                        <p>ژمارەی وەسڵ: <span className="font-black">#{displaySerial}</span></p>
                         <p>جۆری وەسڵ: <span className="text-red-700">قەرز (پەڕەی {pageObj.pageNum} لە {totalPages})</span></p>
                       </div>
                     </div>
@@ -1147,6 +1216,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
     </div>
   );
 }
+
 function RecycleBinView({ isDark, customers, savedReceipts, theme, onRestoreCash, onRestoreDebt }: any) {
   const deletedCash = savedReceipts.filter((r: any) => r.deleted_at);
   const deletedDebtReceipts: any[] = [];
@@ -1176,7 +1246,9 @@ function RecycleBinView({ isDark, customers, savedReceipts, theme, onRestoreCash
                   <p className="text-sm text-gray-400">بەروار: {new Date(r.date).toLocaleDateString('en-IQ')} - سڕدراوە لە: {new Date(r.deleted_at).toLocaleDateString('en-IQ')}</p>
                   <p className={`font-black text-lg ${theme.text}`}>{fmtNum(r.totalAmount)} د.ع</p>
                 </div>
-                <button type="button" onClick={() => onRestoreCash(r.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><RotateCcw size={18} /> گەڕاندنەوە</button>
+                <button type="button" onClick={() => onRestoreCash(r.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                  <RotateCcw size={18} /> گەڕاندنەوە
+                </button>
               </div>
             ))}
             {deletedCash.length === 0 && <p className="text-gray-500">هیچ وەسڵێکی نەقدی لە ریسایکل بیندا نییە.</p>}
@@ -1195,7 +1267,9 @@ function RecycleBinView({ isDark, customers, savedReceipts, theme, onRestoreCash
                 <button type="button" onClick={() => {
                   const updated = r.allReceipts.map((item: any) => item.id === r.id ? { ...item, deleted_at: null } : item);
                   onRestoreDebt(r.customerId, updated);
-                }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><RotateCcw size={18} /> گەڕاندنەوە</button>
+                }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                  <RotateCcw size={18} /> گەڕاندنەوە
+                </button>
               </div>
             ))}
             {deletedDebtReceipts.length === 0 && <p className="text-gray-500">هیچ وەسڵێکی قەرزی لە ریسایکل بیندا نییە.</p>}
@@ -1205,6 +1279,7 @@ function RecycleBinView({ isDark, customers, savedReceipts, theme, onRestoreCash
     </div>
   );
 }
+
 function CashReceiptView({ theme, onSaveReceipt, startNewReceipt, draftId, draftSerial }: any) {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -1267,7 +1342,9 @@ function CashReceiptView({ theme, onSaveReceipt, startNewReceipt, draftId, draft
     });
   };
 
-  const handlePrintClick = () => { window.print(); };
+  const handlePrintClick = () => {
+    window.print();
+  };
 
   const ITEMS_PER_PAGE = 15;
   const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE) || 1;
@@ -1426,6 +1503,7 @@ function CashReceiptView({ theme, onSaveReceipt, startNewReceipt, draftId, draft
     </div>
   );
 }
+
 function StaticReceiptTemplate({ receipt, theme }: any) {
   return (
     <div className="a4-page bg-white border text-black mx-auto flex flex-col justify-between shadow-sm">
@@ -1466,7 +1544,9 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
                   <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.quantity}</td>
                   <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.unit}</td>
                   <td className="border-2 border-black p-1.5 font-bold" dir="ltr">{fmtNum(priceNum)}</td>
-                  <td className={`border-2 border-black p-1.5 font-black text-sm ${item.type === 'payment' ? 'text-green-600' : 'text-red-600'}`} dir="ltr">{item.type === 'payment' ? `- ${fmtNum(lineTotal)}` : fmtNum(lineTotal)}</td>
+                  <td className={`border-2 border-black p-1.5 font-black text-sm ${item.type === 'payment' ? 'text-green-600' : 'text-red-600'}`} dir="ltr">
+                    {item.type === 'payment' ? `- ${fmtNum(lineTotal)}` : fmtNum(lineTotal)}
+                  </td>
                   <td className="border-2 border-black p-1.5 font-bold text-xs text-blue-700">{item.note || '-'}</td>
                 </tr>
               );
@@ -1490,6 +1570,7 @@ function StaticReceiptTemplate({ receipt, theme }: any) {
     </div>
   );
 }
+
 function StaticDebtReceiptTemplate({ receipt, customer, theme }: any) {
   let totalItemsCost = 0;
   let totalPaymentsMade = 0;
@@ -1540,7 +1621,9 @@ function StaticDebtReceiptTemplate({ receipt, customer, theme }: any) {
                   <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.quantity}</td>
                   <td className="border-2 border-black p-1.5 font-bold">{item.type === 'payment' ? '-' : item.unit}</td>
                   <td className="border-2 border-black p-1.5 font-bold" dir="ltr">{fmtNum(priceNum)}</td>
-                  <td className={`border-2 border-black p-1.5 font-black text-sm ${item.type === 'payment' ? 'text-green-600' : 'text-red-600'}`} dir="ltr">{item.type === 'payment' ? `- ${fmtNum(lineTotal)}` : fmtNum(lineTotal)}</td>
+                  <td className={`border-2 border-black p-1.5 font-black text-sm ${item.type === 'payment' ? 'text-green-600' : 'text-red-600'}`} dir="ltr">
+                    {item.type === 'payment' ? `- ${fmtNum(lineTotal)}` : fmtNum(lineTotal)}
+                  </td>
                   <td className="border-2 border-black p-1.5 font-bold text-xs text-blue-700">{item.note || '-'}</td>
                 </tr>
               );
@@ -1579,13 +1662,14 @@ function StaticDebtReceiptTemplate({ receipt, customer, theme }: any) {
     </div>
   );
 }
+
 function DebtReceiptsArchiveView({ isDark, customers, theme }: any) {
   const [search, setSearch] = useState('');
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
   const allDebtReceipts: any[] = [];
   customers.forEach((c: Customer) => {
-    c.debtReceipts.forEach((r, idx) => {
+    c.debtReceipts.forEach(r => {
       if (r.deleted_at) return;
       if (!r.items || r.items.length === 0) return;
       const hasContent = r.items.some(i => i.name || i.price || i.quantity);
@@ -1602,7 +1686,6 @@ function DebtReceiptsArchiveView({ isDark, customers, theme }: any) {
 
       allDebtReceipts.push({
         ...r,
-        serialNumber: idx + 1,
         customerName: c.name,
         phone: c.phone,
         customerBalance: c.balance,
@@ -1617,7 +1700,9 @@ function DebtReceiptsArchiveView({ isDark, customers, theme }: any) {
     const q = search.trim();
     if (!q) return true;
     const serialStr = r.serialNumber ? String(r.serialNumber) : '';
-    return (r.customerName && r.customerName.includes(q)) || (r.phone && r.phone.includes(q)) || (serialStr && serialStr.includes(q));
+    return (r.customerName && r.customerName.includes(q)) ||
+           (r.phone && r.phone.includes(q)) ||
+           (serialStr && serialStr.includes(q));
   });
 
   return (
@@ -1648,7 +1733,7 @@ function DebtReceiptsArchiveView({ isDark, customers, theme }: any) {
                 </div>
                 <div className="text-left">
                   <p className={`font-black text-xl ${amountColorClass(receipt.receiptTotal)}`}>{fmtNum(receipt.receiptTotal)} د.ع</p>
-                  <p className={`text-xs font-bold ${amountColorClass(receipt.customerBalance)}`}>باڵانس: {fmtNum(receipt.customerBalance)} د.ع</p>
+                  <p className={`text-xs font-bold ${amountColorClass(customer.balance)}`}>باڵانس: {fmtNum(receipt.customerBalance)} د.ع</p>
                 </div>
               </div>
             ))}
@@ -1667,6 +1752,7 @@ function DebtReceiptsArchiveView({ isDark, customers, theme }: any) {
     </div>
   );
 }
+
 function SidebarItem({ icon, label, isActive, onClick, isDark, theme }: any) {
   return (
     <button type="button" onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${isActive ? `${theme.main} text-white shadow-md` : isDark ? `text-gray-300 hover:bg-gray-700 hover:${theme.text}` : `text-gray-600 hover:bg-gray-100 hover:${theme.text}`}`}>
@@ -1674,6 +1760,7 @@ function SidebarItem({ icon, label, isActive, onClick, isDark, theme }: any) {
     </button>
   );
 }
+
 function DashboardCard({ title, amount, suffix, icon: Icon, isDark }: any) {
   return (
     <div className={`p-6 rounded-xl border flex flex-col items-center justify-center gap-4 transition-all ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
