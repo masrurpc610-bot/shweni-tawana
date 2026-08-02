@@ -6,6 +6,16 @@ import {
   Moon, Sun, Search, Trash2, Edit, BookOpen, Plus, X, Printer, FileText, ArrowRight, MinusCircle, LogOut, Lock, User, Hash, Eye, EyeOff, Save, RotateCcw
 } from 'lucide-react';
 
+// فەنکشنی دروستکردنی ژمارەی سریالی درێژ و فەرمی بۆ دایرە حکومییەکان (١١ ڕەقەم)
+const generateUniqueSerial = (): number => {
+  const d = new Date();
+  const yy = String(d.getFullYear()).slice(2);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const randomNum = Math.floor(10000 + Math.random() * 90000); // ٥ ڕەقەمی هەڕەمەکی
+  return Number(`${yy}${mm}${dd}${randomNum}`);
+};
+
 type ReceiptItem = { id: number; name: string; quantity: number | string; unit: string; price: number | string; isNew: boolean; type?: 'item' | 'payment'; note?: string; dateStr?: string; timeStr?: string };
 type CustomerReceipt = { id: number; date: string; items: ReceiptItem[]; serialNumber?: number; deleted_at?: string | null };
 type Customer = { id: number; name: string; phone: string; address: string; notes: string; balance: number; date: string; debtReceipts: CustomerReceipt[], user_id?: string };
@@ -72,8 +82,7 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [savedReceipts, setSavedReceipts] = useState<SavedReceipt[]>([]);
   const [currentDraftId, setCurrentDraftId] = useState<number>(() => Date.now());
-  const [currentDraftSerial, setCurrentDraftSerial] = useState<number>(134);
-  const [currentDebtSerial, setCurrentDebtSerial] = useState<number>(1);
+  const [currentDraftSerial, setCurrentDraftSerial] = useState<number>(() => generateUniqueSerial());
   const [loading, setLoading] = useState<boolean>(false);
 
   const fetchDataFromSupabase = async () => {
@@ -88,27 +97,30 @@ export default function App() {
       if (custError) {
         console.error('Error fetching customers:', custError.message);
       } else if (customerData) {
-        let globalCounter = 1;
         const mappedCustomers = customerData.map((c: any) => {
           const rawReceipts = c.debt_receipts || [];
           const activeReceipts = rawReceipts.filter((r: any) => {
             if (!r.deleted_at) return true;
             return new Date(r.deleted_at) > oneMonthAgo;
           });
-          const indexedReceipts = activeReceipts.map((r: any) => ({
-            ...r,
-            serialNumber: r.serialNumber && parseNumber(r.serialNumber) > 0 ? parseNumber(r.serialNumber) : globalCounter++
-          }));
+          
+          // چاککردنی وەسڵە کۆنەکان: ئەگەر وەسڵێک ژمارەی بچوک بێت، دەیگۆڕێت بۆ درێژ
+          const fixedReceipts = activeReceipts.map((r: any) => {
+            let sNum = parseNumber(r.serialNumber);
+            if (sNum < 100000) {
+              sNum = generateUniqueSerial();
+            }
+            return { ...r, serialNumber: sNum };
+          });
 
           return {
             id: c.id, name: c.name || '', phone: c.phone || '', address: c.address || '',
             notes: c.notes || '', balance: Number(c.balance) || 0, date: c.date || new Date().toISOString(),
-            debtReceipts: indexedReceipts
+            debtReceipts: fixedReceipts
           };
         });
 
         setCustomers(mappedCustomers);
-        setCurrentDebtSerial(globalCounter);
       }
 
       const { data: cashData, error: cashError } = await supabase.from('cash_receipts').select('*').order('serial_number', { ascending: true });
@@ -120,18 +132,15 @@ export default function App() {
           return new Date(r.deleted_at) > oneMonthAgo;
         });
 
-        setSavedReceipts(validCash.map((r: any) => ({
-          id: r.id, serialNumber: Number(r.serial_number) || 0, customerName: r.customer_name || '', phone: r.phone || '',
-          date: r.date || new Date().toISOString(), totalAmount: Number(r.total_amount) || 0,
-          type: 'cash', items: r.items || [], deleted_at: r.deleted_at
-        })));
-        
-        let maxCashSerial = 133;
-        cashData.forEach((r: any) => {
-          const sNum = parseNumber(r.serial_number);
-          if (sNum > maxCashSerial) maxCashSerial = sNum;
-        });
-        setCurrentDraftSerial(maxCashSerial + 1);
+        setSavedReceipts(validCash.map((r: any) => {
+          let sNum = parseNumber(r.serial_number);
+          if (sNum < 100000) sNum = generateUniqueSerial();
+          return {
+            id: r.id, serialNumber: sNum, customerName: r.customer_name || '', phone: r.phone || '',
+            date: r.date || new Date().toISOString(), totalAmount: Number(r.total_amount) || 0,
+            type: 'cash', items: r.items || [], deleted_at: r.deleted_at
+          };
+        }));
       }
     } catch (err) {
       console.error('Database fetch error:', err);
@@ -180,17 +189,15 @@ export default function App() {
 
   const startNewCashReceipt = () => {
     setCurrentDraftId(Date.now());
-    setCurrentDraftSerial(prev => prev + 1);
+    setCurrentDraftSerial(generateUniqueSerial());
   };
 
   const handleAddCustomer = async (newCustomer: Customer) => {
-    const serialToUse = currentDebtSerial;
     const receiptsWithSerial = (newCustomer.debtReceipts || []).map((r) => ({
       ...r,
-      serialNumber: serialToUse,
+      serialNumber: generateUniqueSerial(),
       deleted_at: null
     }));
-    setCurrentDebtSerial(prev => prev + 1);
 
     const updatedCustomer = { ...newCustomer, debtReceipts: receiptsWithSerial };
     setCustomers(prev => [...prev, updatedCustomer]);
@@ -274,15 +281,6 @@ export default function App() {
       setActiveCustomer(prev => prev ? { ...prev, debtReceipts: newReceipts, balance: total } : prev);
     }
 
-    let maxSerial = 0;
-    newReceipts.forEach(r => {
-      const sNum = parseNumber(r.serialNumber);
-      if (sNum > maxSerial) maxSerial = sNum;
-    });
-    if (maxSerial >= currentDebtSerial) {
-      setCurrentDebtSerial(maxSerial + 1);
-    }
-
     if (ledgerSaveTimers.current[customerId]) clearTimeout(ledgerSaveTimers.current[customerId]);
     ledgerSaveTimers.current[customerId] = setTimeout(async () => {
       const { error } = await supabase.from('customers').update({
@@ -290,7 +288,7 @@ export default function App() {
       }).eq('id', customerId);
       if (error) console.error('Error updating ledger:', error.message);
     }, 800);
-  }, [activeCustomer, currentDebtSerial]);
+  }, [activeCustomer]);
 
   const handleLogout = () => {
     localStorage.removeItem('shweni_tawana_user');
@@ -352,7 +350,7 @@ export default function App() {
         <main id="main-content" className={`flex-1 overflow-y-auto p-8 transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
           {activeTab === 'dashboard' && <DashboardView isDark={isDarkMode} timeFilter={timeFilter} setTimeFilter={setTimeFilter} customers={customers} savedReceipts={savedReceipts} onDeleteReceipt={handleDeleteSavedReceipt} onEditReceipt={handleEditSavedReceipt} theme={theme} onViewDebtArchive={() => setActiveTab('debt-archive')} />}
           {activeTab === 'customers' && <CustomersView isDark={isDarkMode} customers={customers} theme={theme} onAdd={handleAddCustomer} onEdit={handleEditCustomer} onDelete={handleDeleteCustomer} onOpenLedger={(c: Customer) => { setActiveCustomer(c); setActiveTab('customer-ledger'); }} />}
-          {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} nextDebtSerial={currentDebtSerial} setGlobalSerial={(s: number) => setCurrentDebtSerial(s)} />}
+          {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} />}
           {activeTab === 'debt-archive' && <DebtReceiptsArchiveView isDark={isDarkMode} customers={customers} theme={theme} />}
           {activeTab === 'cash-receipt' && <CashReceiptView isDark={isDarkMode} theme={theme} onSaveReceipt={handleSaveCashReceipt} startNewReceipt={startNewCashReceipt} draftId={currentDraftId} draftSerial={currentDraftSerial} />}
           {activeTab === 'recycle-bin' && <RecycleBinView isDark={isDarkMode} customers={customers} savedReceipts={savedReceipts} theme={theme} onRestoreCash={handleRestoreSavedReceipt} onRestoreDebt={handleUpdateCustomerLedger} />}
@@ -490,7 +488,7 @@ function ReceiptPhoneBanner() {
           0750 497 8758 &nbsp;-&nbsp; 0750 017 2002
         </div>
       </div>
-      <div className="text-center mt-2 text-[10px] text-gray-400 font-sans" dir="ltr">Designed and Developed by Eng. Masrour</div>
+      <div className="text-center mt-2 text-[10px] text-gray-400 font-sans" dir="ltr">Designed and Developed by Eng. Masrur</div>
     </div>
   );
 }
@@ -962,18 +960,21 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
 function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
   const [receipts, setReceipts] = useState<CustomerReceipt[]>(() => {
     if (customer.debtReceipts?.length > 0) {
-      return customer.debtReceipts.map((r: CustomerReceipt, idx: number) => {
+      return customer.debtReceipts.map((r: CustomerReceipt) => {
+        let sNum = parseNumber(r.serialNumber);
+        if (sNum < 100000) sNum = generateUniqueSerial();
+
         if (r.items.length === 0) {
           const dateStr = new Date().toLocaleDateString('en-GB');
           const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-          return { ...r, serialNumber: idx + 1, items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] };
+          return { ...r, serialNumber: sNum, items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] };
         }
-        return { ...r, serialNumber: idx + 1 };
+        return { ...r, serialNumber: sNum };
       });
     } else {
       const dateStr = new Date().toLocaleDateString('en-GB');
       const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-      return [{ id: Date.now(), serialNumber: 1, date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] }];
+      return [{ id: Date.now(), serialNumber: generateUniqueSerial(), date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] }];
     }
   });
 
@@ -982,12 +983,9 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
   }, [receipts]);
 
   const addNewReceiptBlock = () => {
-    const activeLen = receipts.filter(r => !r.deleted_at).length;
-    const nextSerial = activeLen + 1;
-
     const dateStr = new Date().toLocaleDateString('en-GB');
     const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    setReceipts([...receipts, { id: Date.now(), serialNumber: nextSerial, date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }], deleted_at: null }]);
+    setReceipts([...receipts, { id: Date.now(), serialNumber: generateUniqueSerial(), date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }], deleted_at: null }]);
   };
 
   const deleteReceiptBlock = (id: number) => {
@@ -1052,8 +1050,8 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
         </div>
       </div>
 
-      {activeReceipts.map((receipt, index) => {
-        const displaySerial = index + 1;
+      {activeReceipts.map((receipt) => {
+        const displaySerial = receipt.serialNumber;
         const prevDebt = runningTotalDebt;
         let totalItemsCost = 0;
         let totalPaymentsMade = 0;
@@ -1223,69 +1221,6 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack }: any) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function RecycleBinView({ isDark, customers, savedReceipts, theme, onRestoreCash, onRestoreDebt }: any) {
-  const deletedCash = savedReceipts.filter((r: any) => r.deleted_at);
-  const deletedDebtReceipts: any[] = [];
-  customers.forEach((c: Customer) => {
-    c.debtReceipts.forEach((r: any) => {
-      if (r.deleted_at) {
-        deletedDebtReceipts.push({ ...r, customerId: c.id, customerName: c.name, customerPhone: c.phone, allReceipts: c.debtReceipts });
-      }
-    });
-  });
-
-  return (
-    <div className="max-w-6xl mx-auto">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold mb-2">پاشماوەکان (ڕیسایکل بین)</h2>
-        <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>ئەم وەسڵانە بۆ ماوەی مانگێک لێرە دەمێننەوە و پاشان بە شێوەیەکی ئۆتۆماتیکی دەسڕێنەوە، یان دەتوانیت بیانگەڕێنیتەوە.</p>
-      </div>
-
-      <div className="space-y-6">
-        <div>
-          <h3 className="text-xl font-bold mb-4 text-red-600">وەسڵە نەقدییە سڕدراوەکان</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {deletedCash.map((r: any) => (
-              <div key={r.id} className={`p-4 rounded-xl border flex justify-between items-center ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                <div>
-                  <p className="font-bold text-lg">#{r.serialNumber} - {r.customerName}</p>
-                  <p className="text-sm text-gray-400">بەروار: {new Date(r.date).toLocaleDateString('en-IQ')} - سڕدراوە لە: {new Date(r.deleted_at).toLocaleDateString('en-IQ')}</p>
-                  <p className={`font-black text-lg ${theme.text}`}>{fmtNum(r.totalAmount)} د.ع</p>
-                </div>
-                <button type="button" onClick={() => onRestoreCash(r.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
-                  <RotateCcw size={18} /> گەڕاندنەوە
-                </button>
-              </div>
-            ))}
-            {deletedCash.length === 0 && <p className="text-gray-500">هیچ وەسڵێکی نەقدی لە ریسایکل بیندا نییە.</p>}
-          </div>
-        </div>
-
-        <div>
-          <h3 className="text-xl font-bold mb-4 text-red-600">وەسڵە قەرزییە سڕدراوەکان</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {deletedDebtReceipts.map((r: any) => (
-              <div key={r.id} className={`p-4 rounded-xl border flex justify-between items-center ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                <div>
-                  <p className="font-bold text-lg">#{r.serialNumber} - {r.customerName}</p>
-                  <p className="text-sm text-gray-400">مۆبایل: <span dir="ltr">{r.customerPhone}</span> - سڕدراوە لە: {new Date(r.deleted_at).toLocaleDateString('en-IQ')}</p>
-                </div>
-                <button type="button" onClick={() => {
-                  const updated = r.allReceipts.map((item: any) => item.id === r.id ? { ...item, deleted_at: null } : item);
-                  onRestoreDebt(r.customerId, updated);
-                }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
-                  <RotateCcw size={18} /> گەڕاندنەوە
-                </button>
-              </div>
-            ))}
-            {deletedDebtReceipts.length === 0 && <p className="text-gray-500">هیچ وەسڵێکی قەرزی لە ریسایکل بیندا نییە.</p>}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1773,12 +1708,12 @@ function SidebarItem({ icon, label, isActive, onClick, isDark, theme }: any) {
 
 function DashboardCard({ title, amount, suffix, icon: Icon, isDark }: any) {
   return (
-    <p className={`p-6 rounded-xl border flex flex-col items-center justify-center gap-4 transition-all ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
+    <div className={`p-6 rounded-xl border flex flex-col items-center justify-center gap-4 transition-all ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
       <div className={isDark ? 'bg-gray-700 p-3 rounded-2xl' : 'bg-gray-50 p-3 rounded-2xl'}><Icon size={24} /></div>
       <div className="text-center">
         <div className="text-2xl font-black flex items-center justify-center gap-1"><span>{amount}</span>{suffix && <span className="text-sm font-bold text-gray-400">{suffix}</span>}</div>
         <div className={`text-sm mt-1 font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{title}</div>
       </div>
-    </p>
+    </div>
   );
 }
