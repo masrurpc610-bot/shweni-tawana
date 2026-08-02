@@ -3,13 +3,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import {
   LayoutDashboard, Users, ReceiptText, Building2,
-  Moon, Sun, Search, Trash2, Edit, BookOpen, Plus, X, Printer, FileText, ArrowRight, MinusCircle, LogOut, Lock, User, Hash, Eye, EyeOff, Save
+  Moon, Sun, Search, Trash2, Edit, BookOpen, Plus, X, Printer, FileText, ArrowRight, MinusCircle, LogOut, Lock, User, Hash, Eye, EyeOff, Save, RotateCcw
 } from 'lucide-react';
 
 type ReceiptItem = { id: number; name: string; quantity: number | string; unit: string; price: number | string; isNew: boolean; type?: 'item' | 'payment'; note?: string; dateStr?: string; timeStr?: string };
-type CustomerReceipt = { id: number; date: string; items: ReceiptItem[]; serialNumber?: number };
+type CustomerReceipt = { id: number; date: string; items: ReceiptItem[]; serialNumber?: number; deleted_at?: string | null };
 type Customer = { id: number; name: string; phone: string; address: string; notes: string; balance: number; date: string; debtReceipts: CustomerReceipt[], user_id?: string };
-type SavedReceipt = { id: number; serialNumber?: number; customerName: string; phone: string; date: string; totalAmount: number; type: 'cash'; items: ReceiptItem[], user_id?: string };
+type SavedReceipt = { id: number; serialNumber?: number; customerName: string; phone: string; date: string; totalAmount: number; type: 'cash'; items: ReceiptItem[], user_id?: string; deleted_at?: string | null };
 
 const convertToEnglishDigits = (val: any): string => {
   if (val === null || val === undefined) return '';
@@ -55,11 +55,19 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [timeFilter, setTimeFilter] = useState('هەموو کات');
+  const [timeFilter, setTimeFilter] = useState(() => localStorage.getItem('shweni_tawana_time_filter') || 'هەموو کات');
   const [activeCustomer, setActiveCustomer] = useState<Customer | null>(null);
 
-  const [colorName, setColorName] = useState('emerald');
-  const theme = THEMES[colorName];
+  const [colorName, setColorName] = useState(() => localStorage.getItem('shweni_tawana_color') || 'emerald');
+  const theme = THEMES[colorName] || THEMES.emerald;
+
+  useEffect(() => {
+    localStorage.setItem('shweni_tawana_color', colorName);
+  }, [colorName]);
+
+  useEffect(() => {
+    localStorage.setItem('shweni_tawana_time_filter', timeFilter);
+  }, [timeFilter]);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [savedReceipts, setSavedReceipts] = useState<SavedReceipt[]>([]);
@@ -73,6 +81,9 @@ export default function App() {
     setLoading(true);
 
     try {
+      const now = new Date();
+      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
       const { data: customerData, error: custError } = await supabase.from('customers').select('*');
       if (custError) {
         console.error('Error fetching customers:', custError.message);
@@ -80,7 +91,10 @@ export default function App() {
         setCustomers(customerData.map((c: any) => ({
           id: c.id, name: c.name || '', phone: c.phone || '', address: c.address || '',
           notes: c.notes || '', balance: Number(c.balance) || 0, date: c.date || new Date().toISOString(),
-          debtReceipts: c.debt_receipts || []
+          debtReceipts: (c.debt_receipts || []).filter((r: any) => {
+            if (!r.deleted_at) return true;
+            return new Date(r.deleted_at) > oneMonthAgo;
+          })
         })));
 
         let maxDebtSerial = 0;
@@ -98,10 +112,15 @@ export default function App() {
       if (cashError) {
         console.error('Error fetching cash receipts:', cashError.message);
       } else if (cashData) {
-        setSavedReceipts(cashData.map((r: any) => ({
+        const validCash = cashData.filter((r: any) => {
+          if (!r.deleted_at) return true;
+          return new Date(r.deleted_at) > oneMonthAgo;
+        });
+
+        setSavedReceipts(validCash.map((r: any) => ({
           id: r.id, serialNumber: Number(r.serial_number) || 0, customerName: r.customer_name || '', phone: r.phone || '',
           date: r.date || new Date().toISOString(), totalAmount: Number(r.total_amount) || 0,
-          type: 'cash', items: r.items || []
+          type: 'cash', items: r.items || [], deleted_at: r.deleted_at
         })));
         
         let maxCashSerial = 133;
@@ -135,7 +154,7 @@ export default function App() {
   }
 
   const handleSaveCashReceipt = async (receiptData: Omit<SavedReceipt, 'id'>) => {
-    const receiptToSave = { id: currentDraftId, serialNumber: currentDraftSerial, ...receiptData };
+    const receiptToSave = { id: currentDraftId, serialNumber: currentDraftSerial, ...receiptData, deleted_at: null };
     
     setSavedReceipts(prev => {
       const exists = prev.find(r => r.id === currentDraftId);
@@ -145,7 +164,7 @@ export default function App() {
 
     const { error } = await supabase.from('cash_receipts').upsert({
       id: currentDraftId, serial_number: currentDraftSerial, customer_name: receiptData.customerName, phone: receiptData.phone,
-      date: receiptData.date, total_amount: receiptData.totalAmount, items: receiptData.items
+      date: receiptData.date, total_amount: receiptData.totalAmount, items: receiptData.items, deleted_at: null
     });
     
     if (error) {
@@ -165,7 +184,8 @@ export default function App() {
     const serialToUse = currentDebtSerial;
     const updatedReceipts = newCustomer.debtReceipts.map((r, i) => ({
       ...r,
-      serialNumber: serialToUse + i
+      serialNumber: serialToUse + i,
+      deleted_at: null
     }));
     const updatedCustomer = { ...newCustomer, debtReceipts: updatedReceipts };
     setCustomers(prev => [...prev, updatedCustomer]);
@@ -184,11 +204,18 @@ export default function App() {
   };
 
   const handleDeleteSavedReceipt = async (id: number) => {
-    if (window.confirm('دڵنیایت لە سڕینەوەی ئەم وەسڵە نەقدییە؟')) {
-      setSavedReceipts(prev => prev.filter(r => r.id !== id));
-      const { error } = await supabase.from('cash_receipts').delete().eq('id', id);
+    if (window.confirm('دڵنیایت لەناردنی ئەم وەسڵە نەقدییە بۆ ریسایکل بین؟')) {
+      const nowIso = new Date().toISOString();
+      setSavedReceipts(prev => prev.map(r => r.id === id ? { ...r, deleted_at: nowIso } : r));
+      const { error } = await supabase.from('cash_receipts').update({ deleted_at: nowIso }).eq('id', id);
       if (error) console.error('Error deleting cash receipt:', error.message);
     }
+  };
+
+  const handleRestoreSavedReceipt = async (id: number) => {
+    setSavedReceipts(prev => prev.map(r => r.id === id ? { ...r, deleted_at: null } : r));
+    const { error } = await supabase.from('cash_receipts').update({ deleted_at: null }).eq('id', id);
+    if (error) console.error('Error restoring cash receipt:', error.message);
   };
 
   const handleEditSavedReceipt = async (updatedReceipt: SavedReceipt) => {
@@ -223,11 +250,13 @@ export default function App() {
   const handleUpdateCustomerLedger = useCallback((customerId: number, newReceipts: CustomerReceipt[]) => {
     let total = 0;
     newReceipts.forEach(r => {
-      r.items.forEach(i => {
-        const price = parseNumber(i.price);
-        const qty = parseNumber(i.quantity);
-        total += (i.type === 'payment' ? -price : qty * price);
-      });
+      if (!r.deleted_at) {
+        r.items.forEach(i => {
+          const price = parseNumber(i.price);
+          const qty = parseNumber(i.quantity);
+          total += (i.type === 'payment' ? -price : qty * price);
+        });
+      }
     });
 
     setCustomers(prev => {
@@ -278,6 +307,7 @@ export default function App() {
           <SidebarItem icon={<Users size={20} />} label="کڕیارەکان" isActive={activeTab === 'customers' || activeTab === 'customer-ledger'} onClick={() => setActiveTab('customers')} isDark={isDarkMode} theme={theme} />
           <SidebarItem icon={<ReceiptText size={20} />} label="وەسڵی نەقدی" isActive={activeTab === 'cash-receipt'} onClick={() => setActiveTab('cash-receipt')} isDark={isDarkMode} theme={theme} />
           <SidebarItem icon={<FileText size={20} />} label="ئەرشیفی وەسڵە قەرزی" isActive={activeTab === 'debt-archive'} onClick={() => setActiveTab('debt-archive')} isDark={isDarkMode} theme={theme} />
+          <SidebarItem icon={<Trash2 size={20} />} label="پاشماوەکان (ڕیسایکل)" isActive={activeTab === 'recycle-bin'} onClick={() => setActiveTab('recycle-bin')} isDark={isDarkMode} theme={theme} />
 
           <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
             <button type="button" onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-red-500 hover:bg-red-50 dark:hover:bg-gray-700 transition-colors">
@@ -319,6 +349,7 @@ export default function App() {
           {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} nextDebtSerial={currentDebtSerial} />}
           {activeTab === 'debt-archive' && <DebtReceiptsArchiveView isDark={isDarkMode} customers={customers} theme={theme} />}
           {activeTab === 'cash-receipt' && <CashReceiptView isDark={isDarkMode} theme={theme} onSaveReceipt={handleSaveCashReceipt} startNewReceipt={startNewCashReceipt} draftId={currentDraftId} draftSerial={currentDraftSerial} />}
+          {activeTab === 'recycle-bin' && <RecycleBinView isDark={isDarkMode} customers={customers} savedReceipts={savedReceipts} theme={theme} onRestoreCash={handleRestoreSavedReceipt} onRestoreDebt={handleUpdateCustomerLedger} />}
         </main>
       </div>
     </div>
@@ -467,24 +498,36 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
   const [hideBalance, setHideBalance] = useState(true);
   const displayAmount = (n: number | string) => hideBalance ? '***' : fmtNum(n);
 
-  const filterByTime = (dateString: string) => {
+  const filterByDate = (dateStr: string) => {
+    if (!dateStr) return false;
     if (timeFilter === 'هەموو کات') return true;
-    const diffDays = Math.ceil(Math.abs(new Date().getTime() - new Date(dateString).getTime()) / (1000 * 60 * 60 * 24));
-    if (timeFilter === 'ئەمڕۆ') return diffDays <= 1;
+    const targetDate = new Date(dateStr);
+    const today = new Date();
+    
+    if (timeFilter === 'ئەمڕۆ') {
+      return targetDate.getFullYear() === today.getFullYear() &&
+             targetDate.getMonth() === today.getMonth() &&
+             targetDate.getDate() === today.getDate();
+    }
+    
+    const diffDays = Math.ceil(Math.abs(today.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
     if (timeFilter === 'ئەم هەفتەیە') return diffDays <= 7;
     if (timeFilter === 'ئەم مانگە') return diffDays <= 30;
     if (timeFilter === 'ئەم ساڵە') return diffDays <= 365;
     return true;
   };
 
-  const filteredCustomers = customers.filter((c: any) => filterByTime(c.date));
-  const filteredReceipts = savedReceipts.filter((r: any) => filterByTime(r.date));
+  const activeCashReceipts = savedReceipts.filter((r: any) => !r.deleted_at);
+  const filteredCustomers = customers.filter((c: any) => filterByDate(c.date));
+  const filteredReceipts = activeCashReceipts.filter((r: any) => filterByDate(r.date));
 
   const filteredDebtReceipts: any[] = [];
   customers.forEach((c: Customer) => {
     c.debtReceipts.forEach(r => {
-      if (r.items && r.items.length > 0 && r.items.some(i => i.name || i.price || i.quantity) && filterByTime(r.date)) {
-        filteredDebtReceipts.push(r);
+      if (!r.deleted_at && r.items && r.items.length > 0 && r.items.some(i => i.name || i.price || i.quantity)) {
+        if (filterByDate(r.date)) {
+          filteredDebtReceipts.push(r);
+        }
       }
     });
   });
@@ -492,14 +535,24 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
   const allPayments: any[] = [];
   customers.forEach((c: Customer) => {
     c.debtReceipts.forEach(r => {
-      r.items.forEach(i => {
-        if (i.type === 'payment' && filterByTime(r.date)) {
-          allPayments.push({
-            customerName: c.name, phone: c.phone, amount: parseNumber(i.price),
-            receiver: i.note, date: r.date, dateStr: i.dateStr, timeStr: i.timeStr
-          });
-        }
-      });
+      if (!r.deleted_at) {
+        r.items.forEach(i => {
+          if (i.type === 'payment') {
+            const itemDate = i.dateStr ? (() => {
+              const parts = i.dateStr.split('/');
+              if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+              return r.date;
+            })() : r.date;
+
+            if (filterByDate(itemDate)) {
+              allPayments.push({
+                customerName: c.name, phone: c.phone, amount: parseNumber(i.price),
+                receiver: i.note, date: r.date, dateStr: i.dateStr, timeStr: i.timeStr
+              });
+            }
+          }
+        });
+      }
     });
   });
 
@@ -619,7 +672,7 @@ function DashboardView({ isDark, timeFilter, setTimeFilter, customers, savedRece
                         </div>
                         <button type="button" onClick={() => setSelectedReceipt(receipt)} className="text-emerald-600 hover:text-emerald-700 p-2 rounded-lg hover:bg-emerald-50 transition-colors" title="چاپکردن / ریپرینت"><Printer size={20} /></button>
                         <button type="button" onClick={() => setEditingReceipt(receipt)} className="text-blue-500 hover:text-blue-700 p-2 rounded-lg hover:bg-blue-50 transition-colors" title="دەستکاری کردن"><Edit size={20} /></button>
-                        <button type="button" onClick={() => onDeleteReceipt(receipt.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors" title="سڕینەوەی وەسڵ"><Trash2 size={20} /></button>
+                        <button type="button" onClick={() => onDeleteReceipt(receipt.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors" title="ناردن بۆ ریسایکل بین"><Trash2 size={20} /></button>
                       </div>
                     </div>
                   ))}
@@ -923,18 +976,13 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack, nextDebtSer
   const addNewReceiptBlock = () => {
     const dateStr = new Date().toLocaleDateString('en-GB');
     const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    setReceipts([...receipts, { id: Date.now(), serialNumber: nextDebtSerial, date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] }]);
+    setReceipts([...receipts, { id: Date.now(), serialNumber: nextDebtSerial, date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }], deleted_at: null }]);
   };
 
   const deleteReceiptBlock = (id: number) => {
-    if (window.confirm('دڵنیایت لە سڕینەوەی تەواوی ئەم وەسڵە؟')) {
-      let filtered = receipts.filter(r => r.id !== id);
-      if (filtered.length === 0) {
-        const dateStr = new Date().toLocaleDateString('en-GB');
-        const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-        filtered = [{ id: Date.now(), date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] }];
-      }
-      setReceipts(filtered);
+    if (window.confirm('دڵنیایت لەناردنی ئەم وەسڵە بۆ ریسایکل بین؟')) {
+      const nowIso = new Date().toISOString();
+      setReceipts(receipts.map(r => r.id === id ? { ...r, deleted_at: nowIso } : r));
     }
   };
 
@@ -977,6 +1025,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack, nextDebtSer
   };
 
   let runningTotalDebt = 0;
+  const activeReceipts = receipts.filter(r => !r.deleted_at);
 
   return (
     <div className="w-full pb-20">
@@ -991,7 +1040,7 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack, nextDebtSer
         </div>
       </div>
 
-      {receipts.map((receipt) => {
+      {activeReceipts.map((receipt) => {
         const prevDebt = runningTotalDebt;
         let totalItemsCost = 0;
         let totalPaymentsMade = 0;
@@ -1161,6 +1210,69 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack, nextDebtSer
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function RecycleBinView({ isDark, customers, savedReceipts, theme, onRestoreCash, onRestoreDebt }: any) {
+  const deletedCash = savedReceipts.filter((r: any) => r.deleted_at);
+  const deletedDebtReceipts: any[] = [];
+  customers.forEach((c: Customer) => {
+    c.debtReceipts.forEach((r: any) => {
+      if (r.deleted_at) {
+        deletedDebtReceipts.push({ ...r, customerId: c.id, customerName: c.name, customerPhone: c.phone, allReceipts: c.debtReceipts });
+      }
+    });
+  });
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold mb-2">پاشماوەکان (ڕیسایکل بین)</h2>
+        <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>ئەم وەسڵانە بۆ ماوەی مانگێک لێرە دەمێننەوە و پاشان بە شێوەیەکی ئۆتۆماتیکی دەسڕێنەوە، یان دەتوانیت بیانگەڕێنیتەوە.</p>
+      </div>
+
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-xl font-bold mb-4 text-red-600">وەسڵە نەقدییە سڕدراوەکان</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {deletedCash.map((r: any) => (
+              <div key={r.id} className={`p-4 rounded-xl border flex justify-between items-center ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                <div>
+                  <p className="font-bold text-lg">#{r.serialNumber} - {r.customerName}</p>
+                  <p className="text-sm text-gray-400">بەروار: {new Date(r.date).toLocaleDateString('en-IQ')} - سڕدراوە لە: {new Date(r.deleted_at).toLocaleDateString('en-IQ')}</p>
+                  <p className={`font-black text-lg ${theme.text}`}>{fmtNum(r.totalAmount)} د.ع</p>
+                </div>
+                <button type="button" onClick={() => onRestoreCash(r.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                  <RotateCcw size={18} /> گەڕاندنەوە
+                </button>
+              </div>
+            ))}
+            {deletedCash.length === 0 && <p className="text-gray-500">هیچ وەسڵێکی نەقدی لە ریسایکل بیندا نییە.</p>}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-xl font-bold mb-4 text-red-600">وەسڵە قەرزییە سڕدراوەکان</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {deletedDebtReceipts.map((r: any) => (
+              <div key={r.id} className={`p-4 rounded-xl border flex justify-between items-center ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                <div>
+                  <p className="font-bold text-lg">#{r.serialNumber} - {r.customerName}</p>
+                  <p className="text-sm text-gray-400">مۆبایل: <span dir="ltr">{r.customerPhone}</span> - سڕدراوە لە: {new Date(r.deleted_at).toLocaleDateString('en-IQ')}</p>
+                </div>
+                <button type="button" onClick={() => {
+                  const updated = r.allReceipts.map((item: any) => item.id === r.id ? { ...item, deleted_at: null } : item);
+                  onRestoreDebt(r.customerId, updated);
+                }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                  <RotateCcw size={18} /> گەڕاندنەوە
+                </button>
+              </div>
+            ))}
+            {deletedDebtReceipts.length === 0 && <p className="text-gray-500">هیچ وەسڵێکی قەرزی لە ریسایکل بیندا نییە.</p>}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1555,6 +1667,7 @@ function DebtReceiptsArchiveView({ isDark, customers, theme }: any) {
   const allDebtReceipts: any[] = [];
   customers.forEach((c: Customer) => {
     c.debtReceipts.forEach(r => {
+      if (r.deleted_at) return;
       if (!r.items || r.items.length === 0) return;
       const hasContent = r.items.some(i => i.name || i.price || i.quantity);
       if (!hasContent) return;
