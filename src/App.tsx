@@ -88,24 +88,25 @@ export default function App() {
       if (custError) {
         console.error('Error fetching customers:', custError.message);
       } else if (customerData) {
-        setCustomers(customerData.map((c: any) => ({
-          id: c.id, name: c.name || '', phone: c.phone || '', address: c.address || '',
-          notes: c.notes || '', balance: Number(c.balance) || 0, date: c.date || new Date().toISOString(),
-          debtReceipts: (c.debt_receipts || []).filter((r: any) => {
-            if (!r.deleted_at) return true;
-            return new Date(r.deleted_at) > oneMonthAgo;
-          })
-        })));
-
-        let maxDebtSerial = 0;
-        customerData.forEach((c: any) => {
-          const receipts = c.debt_receipts || [];
-          receipts.forEach((r: any) => {
-            const sNum = parseNumber(r.serialNumber);
-            if (sNum > maxDebtSerial) maxDebtSerial = sNum;
+        let maxGlobalDebtSerial = 0;
+        const mappedCustomers = customerData.map((c: any) => {
+          const receipts = (c.debt_receipts || []).map((r: any, idx: number) => {
+            const sNum = parseNumber(r.serialNumber) || (idx + 1);
+            if (sNum > maxGlobalDebtSerial) maxGlobalDebtSerial = sNum;
+            return { ...r, serialNumber: sNum };
           });
+          return {
+            id: c.id, name: c.name || '', phone: c.phone || '', address: c.address || '',
+            notes: c.notes || '', balance: Number(c.balance) || 0, date: c.date || new Date().toISOString(),
+            debtReceipts: receipts.filter((r: any) => {
+              if (!r.deleted_at) return true;
+              return new Date(r.deleted_at) > oneMonthAgo;
+            })
+          };
         });
-        setCurrentDebtSerial(maxDebtSerial > 0 ? maxDebtSerial + 1 : 1);
+
+        setCustomers(mappedCustomers);
+        setCurrentDebtSerial(maxGlobalDebtSerial + 1);
       }
 
       const { data: cashData, error: cashError } = await supabase.from('cash_receipts').select('*').order('serial_number', { ascending: true });
@@ -181,15 +182,8 @@ export default function App() {
   };
 
   const handleAddCustomer = async (newCustomer: Customer) => {
-    const serialToUse = currentDebtSerial;
-    const updatedReceipts = newCustomer.debtReceipts.map((r, i) => ({
-      ...r,
-      serialNumber: serialToUse + i,
-      deleted_at: null
-    }));
-    const updatedCustomer = { ...newCustomer, debtReceipts: updatedReceipts };
+    const updatedCustomer = { ...newCustomer };
     setCustomers(prev => [...prev, updatedCustomer]);
-    setCurrentDebtSerial(prev => prev + updatedReceipts.length);
     const { error } = await supabase.from('customers').insert({
       id: updatedCustomer.id,
       name: updatedCustomer.name,
@@ -275,7 +269,9 @@ export default function App() {
       const sNum = parseNumber(r.serialNumber);
       if (sNum > maxSerial) maxSerial = sNum;
     });
-    if (maxSerial > 0) setCurrentDebtSerial(maxSerial + 1);
+    if (maxSerial >= currentDebtSerial) {
+      setCurrentDebtSerial(maxSerial + 1);
+    }
 
     if (ledgerSaveTimers.current[customerId]) clearTimeout(ledgerSaveTimers.current[customerId]);
     ledgerSaveTimers.current[customerId] = setTimeout(async () => {
@@ -284,7 +280,7 @@ export default function App() {
       }).eq('id', customerId);
       if (error) console.error('Error updating ledger:', error.message);
     }, 800);
-  }, [activeCustomer]);
+  }, [activeCustomer, currentDebtSerial]);
 
   const handleLogout = () => {
     localStorage.removeItem('shweni_tawana_user');
@@ -346,7 +342,7 @@ export default function App() {
         <main id="main-content" className={`flex-1 overflow-y-auto p-8 transition-colors duration-300 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
           {activeTab === 'dashboard' && <DashboardView isDark={isDarkMode} timeFilter={timeFilter} setTimeFilter={setTimeFilter} customers={customers} savedReceipts={savedReceipts} onDeleteReceipt={handleDeleteSavedReceipt} onEditReceipt={handleEditSavedReceipt} theme={theme} onViewDebtArchive={() => setActiveTab('debt-archive')} />}
           {activeTab === 'customers' && <CustomersView isDark={isDarkMode} customers={customers} theme={theme} onAdd={handleAddCustomer} onEdit={handleEditCustomer} onDelete={handleDeleteCustomer} onOpenLedger={(c: Customer) => { setActiveCustomer(c); setActiveTab('customer-ledger'); }} />}
-          {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} nextDebtSerial={currentDebtSerial} />}
+          {activeTab === 'customer-ledger' && activeCustomer && <CustomerLedgerView isDark={isDarkMode} customer={activeCustomer} theme={theme} onUpdateDebt={handleUpdateCustomerLedger} onBack={() => setActiveTab('customers')} nextDebtSerial={currentDebtSerial} setGlobalSerial={(s: number) => setCurrentDebtSerial(s)} />}
           {activeTab === 'debt-archive' && <DebtReceiptsArchiveView isDark={isDarkMode} customers={customers} theme={theme} />}
           {activeTab === 'cash-receipt' && <CashReceiptView isDark={isDarkMode} theme={theme} onSaveReceipt={handleSaveCashReceipt} startNewReceipt={startNewCashReceipt} draftId={currentDraftId} draftSerial={currentDraftSerial} />}
           {activeTab === 'recycle-bin' && <RecycleBinView isDark={isDarkMode} customers={customers} savedReceipts={savedReceipts} theme={theme} onRestoreCash={handleRestoreSavedReceipt} onRestoreDebt={handleUpdateCustomerLedger} />}
@@ -953,10 +949,13 @@ function CustomersView({ isDark, customers, theme, onAdd, onEdit, onDelete, onOp
   );
 }
 
-function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack, nextDebtSerial }: any) {
+function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack, nextDebtSerial, setGlobalSerial }: any) {
   const [receipts, setReceipts] = useState<CustomerReceipt[]>(() => {
     if (customer.debtReceipts?.length > 0) {
-      return customer.debtReceipts.map((r: CustomerReceipt) => {
+      let maxExisting = 0;
+      const mapped = customer.debtReceipts.map((r: CustomerReceipt) => {
+        const sNum = parseNumber(r.serialNumber);
+        if (sNum > maxExisting) maxExisting = sNum;
         if (r.items.length === 0) {
           const dateStr = new Date().toLocaleDateString('en-GB');
           const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -964,19 +963,28 @@ function CustomerLedgerView({ customer, theme, onUpdateDebt, onBack, nextDebtSer
         }
         return r;
       });
+      return mapped;
     } else {
       const dateStr = new Date().toLocaleDateString('en-GB');
       const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-      return [{ id: Date.now(), date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] }];
+      return [{ id: Date.now(), serialNumber: nextDebtSerial, date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }] }];
     }
   });
 
-  useEffect(() => { onUpdateDebt(customer.id, receipts); }, [receipts]);
+  useEffect(() => {
+    onUpdateDebt(customer.id, receipts);
+  }, [receipts]);
 
   const addNewReceiptBlock = () => {
+    const allSerials = receipts.map(r => parseNumber(r.serialNumber)).filter(n => n > 0);
+    const nextSerialToUse = allSerials.length > 0 ? Math.max(...allSerials) + 1 : nextDebtSerial;
+    if (nextSerialToUse >= nextDebtSerial) {
+      setGlobalSerial(nextSerialToUse + 1);
+    }
+
     const dateStr = new Date().toLocaleDateString('en-GB');
     const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    setReceipts([...receipts, { id: Date.now(), serialNumber: nextDebtSerial, date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }], deleted_at: null }]);
+    setReceipts([...receipts, { id: Date.now(), serialNumber: nextSerialToUse, date: new Date().toISOString(), items: [{ id: Date.now(), name: '', quantity: '', unit: 'دانە', price: '', isNew: true, type: 'item', note: '', dateStr, timeStr }], deleted_at: null }]);
   };
 
   const deleteReceiptBlock = (id: number) => {
